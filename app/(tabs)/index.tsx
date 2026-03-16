@@ -11,10 +11,10 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Colors, Shadows } from '@/constants/colors';
+import { Colors } from '@/constants/colors';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase';
-import { MatchWithTeams, MatchStatus } from '@/types/database';
+import { MatchWithTeams } from '@/types/database';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -64,19 +64,7 @@ export default function HomeScreen() {
     return new Intl.NumberFormat('vi-VN').format(balance) + 'đ';
   };
 
-  const getStatusBadge = (status: MatchStatus) => {
-    switch (status) {
-      case 'IN_PLAY':
-      case 'PAUSED':
-        return { text: 'Trực tiếp', color: Colors.liveRed, bg: 'rgba(239,68,68,0.15)' };
-      case 'FINISHED':
-        return { text: 'Kết thúc', color: Colors.textMuted, bg: 'rgba(100,116,139,0.15)' };
-      case 'POSTPONED':
-        return { text: 'Hoãn', color: Colors.pendingYellow, bg: Colors.pendingYellowBg };
-      default:
-        return null;
-    }
-  };
+
 
   const formatMatchTime = (utcDate: string) => {
     const date = new Date(utcDate);
@@ -207,6 +195,14 @@ export default function HomeScreen() {
           </View>
         )}
 
+        {/* No live matches hint */}
+        {liveMatches.length === 0 && matches.length > 0 && (
+          <View style={styles.emptySection}>
+            <MaterialIcons name="live-tv" size={20} color={Colors.textMuted} />
+            <Text style={styles.emptySectionText}>Không có trận trực tiếp</Text>
+          </View>
+        )}
+
         {/* Upcoming Matches */}
         {scheduledMatches.length > 0 && (
           <View style={styles.section}>
@@ -256,10 +252,21 @@ export default function HomeScreen() {
                     <View style={styles.miniOddsChip}>
                       <Text style={styles.miniOddsValue}>{match.odds.match_result.draw.toFixed(2)}</Text>
                     </View>
+                    <View style={styles.miniOddsChip}>
+                      <Text style={styles.miniOddsValue}>{match.odds.match_result.away.toFixed(2)}</Text>
+                    </View>
                   </View>
                 )}
               </TouchableOpacity>
             ))}
+          </View>
+        )}
+
+        {/* No upcoming matches hint */}
+        {scheduledMatches.length === 0 && matches.length > 0 && (
+          <View style={styles.emptySection}>
+            <MaterialIcons name="event" size={20} color={Colors.textMuted} />
+            <Text style={styles.emptySectionText}>Không có trận sắp diễn ra</Text>
           </View>
         )}
 
@@ -408,4 +415,10 @@ const styles = StyleSheet.create({
   // Empty
   emptyState: { alignItems: 'center', justifyContent: 'center', paddingTop: 100, gap: 12 },
   emptyText: { color: Colors.textMuted, fontSize: 14 },
+  emptySection: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 20, paddingVertical: 14,
+    backgroundColor: Colors.surfaceDark, borderRadius: 12, marginHorizontal: 16, marginBottom: 12,
+  },
+  emptySectionText: { color: Colors.textMuted, fontSize: 13 },
 });

@@ -206,6 +206,50 @@
 
 ---
 
+## Phase 10: Gamification ⬆️
+
+> Hệ thống huy hiệu, thưởng đăng nhập hàng ngày, cải thiện UX.
+
+- [ ] DB: Tables achievements, user_achievements + RPCs
+- [ ] Achievements system (10 loại huy hiệu + popup + profile grid)
+- [ ] Daily Login Bonus (streak + tiền thưởng tăng dần)
+- [ ] Quick Wins: skeleton loading, haptic, confetti, quick bet presets
+
+---
+
+## Phase 11: Social & Interactions ⬆️
+
+> Tương tác xã hội và cá nhân hóa.
+
+- [ ] DB: match_comments table + RLS
+- [ ] Match Reactions + Comments UI ở Match Detail
+- [ ] Dark/Light Mode toggle (Zustand + AsyncStorage persist)
+- [ ] Avatar Upload (Supabase Storage + expo-image-picker)
+
+---
+
+## Phase 12: Advanced Betting ⬆️
+
+> Kèo xiên, thử thách hàng tuần, biểu đồ thống kê.
+
+- [ ] DB: parlay_bets + parlay_bet_items + settlement RPCs
+- [ ] Parlay UI: Bet Slip floating + history tab
+- [ ] Weekly Challenges system (admin tạo + user tracking)
+- [ ] Stats Charts (biểu đồ tròn + đường) + Push Notifications (local)
+
+---
+
+## Phase 13: Premium ⬆️
+
+> Tính năng cao cấp: multi-league, đối đầu, mini-game, live room.
+
+- [ ] Multi-League (Bundesliga, La Liga, Serie A, Ligue 1, Champions League)
+- [ ] Head-to-Head Challenge (1v1 đối đầu bạn bè)
+- [ ] Mini-game Vòng Quay May Mắn (daily spin + rewards)
+- [ ] Live Prediction Room (Supabase Realtime chat khi trận đang đá)
+
+---
+
 ## Dependency Graph
 
 ```mermaid
@@ -223,7 +267,13 @@ graph TD
     P6 --> P8
     P7 --> P9[Phase 9: Polish]
     P8 --> P9
+    P9 --> P10[Phase 10: Gamification]
+    P9 --> P11[Phase 11: Social]
+    P10 --> P12[Phase 12: Advanced Betting]
+    P11 --> P12
+    P12 --> P13[Phase 13: Premium]
 ```
 
 > Phase 2 và 3 có thể làm song song (không phụ thuộc nhau).
+> Phase 10 và 11 có thể làm song song.
 > Mũi tên = "phải hoàn thành trước".

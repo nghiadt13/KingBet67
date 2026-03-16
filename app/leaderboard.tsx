@@ -15,34 +15,52 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { LeaderboardEntry } from '@/types/database';
 
+type LeaderboardType = 'top_winners' | 'top_losers';
+
 export default function LeaderboardScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [activeType, setActiveType] = useState<LeaderboardType>('top_winners');
 
-  const fetchLeaderboard = useCallback(async () => {
+  const [myRank, setMyRank] = useState<{ rank: number; username: string; total: number } | null>(null);
+
+  const fetchLeaderboard = useCallback(async (type: LeaderboardType) => {
     try {
-      const { data, error } = await supabase.rpc('get_leaderboard', { p_type: 'top_winners', p_limit: 20 });
+      const { data, error } = await supabase.rpc('get_leaderboard', { p_type: type, p_limit: 20 });
       if (error) throw error;
-      setEntries((data as unknown as LeaderboardEntry[]) || []);
+      // RPC returns { leaderboard: [...], my_rank: { rank, username, total } }
+      const parsed = data as any;
+      const list = Array.isArray(parsed?.leaderboard) ? parsed.leaderboard : (Array.isArray(parsed) ? parsed : []);
+      setEntries(list as LeaderboardEntry[]);
+      setMyRank(parsed?.my_rank ?? null);
     } catch (err) {
       console.error('Error fetching leaderboard:', err);
+      setEntries([]);
+      setMyRank(null);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchLeaderboard();
-  }, []);
+    setLoading(true);
+    fetchLeaderboard(activeType);
+  }, [activeType, fetchLeaderboard]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchLeaderboard();
+    await fetchLeaderboard(activeType);
     setRefreshing(false);
-  }, []);
+  }, [activeType, fetchLeaderboard]);
+
+  const handleTypeChange = (type: LeaderboardType) => {
+    if (type !== activeType) {
+      setActiveType(type);
+    }
+  };
 
   const top3 = entries.slice(0, 3);
   const rest = entries.slice(3);
@@ -67,6 +85,28 @@ export default function LeaderboardScreen() {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Bảng xếp hạng</Text>
         <View style={{ width: 40 }} />
+      </View>
+
+      {/* Type Toggle Tabs */}
+      <View style={styles.typeTabs}>
+        <TouchableOpacity
+          style={[styles.typeTab, activeType === 'top_winners' && styles.typeTabActive]}
+          onPress={() => handleTypeChange('top_winners')}
+        >
+          <MaterialIcons name="emoji-events" size={16} color={activeType === 'top_winners' ? Colors.neonGreen : Colors.textMuted} />
+          <Text style={[styles.typeTabText, activeType === 'top_winners' && styles.typeTabTextActive]}>
+            Thắng nhiều
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.typeTab, activeType === 'top_losers' && styles.typeTabActive]}
+          onPress={() => handleTypeChange('top_losers')}
+        >
+          <MaterialIcons name="trending-down" size={16} color={activeType === 'top_losers' ? Colors.errorRed : Colors.textMuted} />
+          <Text style={[styles.typeTabText, activeType === 'top_losers' && { color: Colors.errorRed }]}>
+            Thua nhiều
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -137,6 +177,13 @@ export default function LeaderboardScreen() {
               <Text style={styles.colPointsValue}>{formatPoints(entry.total)}</Text>
             </View>
           ))}
+
+          {entries.length === 0 && (
+            <View style={styles.emptyState}>
+              <MaterialIcons name="leaderboard" size={48} color={Colors.textMuted} />
+              <Text style={styles.emptyText}>Chưa có dữ liệu xếp hạng</Text>
+            </View>
+          )}
         </View>
       </ScrollView>
 
@@ -144,14 +191,18 @@ export default function LeaderboardScreen() {
       {user && (
         <View style={styles.stickyFooter}>
           <View style={styles.stickyCard}>
-            <Text style={styles.stickyRank}>—</Text>
+            <Text style={styles.stickyRank}>
+              {myRank ? `#${myRank.rank}` : '—'}
+            </Text>
             <View style={styles.stickyUserInfo}>
               <View style={styles.stickyAvatar}>
                 <MaterialIcons name="person" size={18} color={Colors.white} />
               </View>
               <Text style={styles.stickyName}>Bạn ({user.username})</Text>
             </View>
-            <Text style={styles.stickyPoints}>{formatPoints(user.balance)} pts</Text>
+            <Text style={styles.stickyPoints}>
+              {myRank ? formatPoints(myRank.total) : '0'} pts
+            </Text>
           </View>
         </View>
       )}
@@ -168,6 +219,21 @@ const styles = StyleSheet.create({
   },
   backBtn: { padding: 8 },
   headerTitle: { color: Colors.white, fontSize: 22, fontWeight: '700' },
+  // Type tabs
+  typeTabs: {
+    flexDirection: 'row', paddingHorizontal: 16, gap: 10, marginBottom: 4,
+  },
+  typeTab: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 10, borderRadius: 10,
+    backgroundColor: 'rgba(30,41,59,0.5)', borderWidth: 1, borderColor: Colors.border,
+  },
+  typeTabActive: {
+    backgroundColor: Colors.neonGreenBg, borderColor: Colors.neonGreenBorder,
+  },
+  typeTabText: { color: Colors.textMuted, fontSize: 13, fontWeight: '700' },
+  typeTabTextActive: { color: Colors.neonGreen },
+  // Scroll
   scrollContent: { paddingBottom: 100 },
   // Podium
   podium: { flexDirection: 'row', justifyContent: 'center', alignItems: 'flex-end', paddingHorizontal: 16, paddingVertical: 28, gap: 16 },
@@ -224,6 +290,9 @@ const styles = StyleSheet.create({
   listAvatarText: { color: Colors.white, fontSize: 11, fontWeight: '700' },
   listName: { color: Colors.white, fontSize: 13, fontWeight: '600' },
   colPointsValue: { width: 60, color: Colors.white, fontSize: 14, fontWeight: '700', textAlign: 'right' },
+  // Empty
+  emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 40, gap: 12 },
+  emptyText: { color: Colors.textMuted, fontSize: 14 },
   // Sticky footer
   stickyFooter: {
     position: 'absolute', bottom: 0, left: 0, right: 0,

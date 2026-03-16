@@ -9,7 +9,6 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
-  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -33,6 +32,14 @@ export default function RegisterScreen() {
 
     if (!username.trim() || !email.trim() || !password || !confirmPassword) {
       setLocalError('Vui lòng điền đầy đủ thông tin');
+      return;
+    }
+    if (!/^[a-zA-Z0-9_]{3,20}$/.test(username.trim())) {
+      setLocalError('Tên đăng nhập: 3-20 ký tự, chỉ chữ cái, số và _');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setLocalError('Email không hợp lệ');
       return;
     }
     if (password !== confirmPassword) {

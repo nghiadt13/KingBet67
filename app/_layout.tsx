@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Stack, useSegments, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator } from 'react-native';
+import * as SystemUI from 'expo-system-ui';
 import { useAuthStore } from '@/stores/authStore';
 import { Colors } from '@/constants/colors';
 
@@ -12,6 +13,8 @@ export default function RootLayout() {
 
   useEffect(() => {
     initialize();
+    // Set Android system navigation bar background to dark
+    SystemUI.setBackgroundColorAsync(Colors.navBg);
   }, []);
 
   // Auth redirect logic

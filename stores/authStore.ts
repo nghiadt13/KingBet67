@@ -19,7 +19,10 @@ interface AuthState {
   fetchUserProfile: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
+export const useAuthStore = create<AuthState>((set, get) => {
+  let _authListenerActive = false;
+
+  return {
   session: null,
   user: null,
   isLoading: true,
@@ -35,15 +38,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         await get().fetchUserProfile();
       }
 
-      // Listen for auth changes
-      supabase.auth.onAuthStateChange(async (_event, session) => {
-        set({ session });
-        if (session) {
-          await get().fetchUserProfile();
-        } else {
-          set({ user: null, isAuthenticated: false });
-        }
-      });
+      // Only subscribe once
+      if (!_authListenerActive) {
+        _authListenerActive = true;
+        supabase.auth.onAuthStateChange(async (_event, session) => {
+          set({ session });
+          if (session) {
+            await get().fetchUserProfile();
+          } else {
+            set({ user: null, isAuthenticated: false });
+          }
+        });
+      }
     } catch {
       set({ isLoading: false });
     }
@@ -125,4 +131,4 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ isAuthenticated: false });
     }
   },
-}));
+}});

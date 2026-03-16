@@ -6,9 +6,11 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/stores/authStore';
 import { User } from '@/types/database';
 
 export default function AdminUsersScreen() {
+  const { user: currentUser } = useAuthStore();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -57,7 +59,7 @@ export default function AdminUsersScreen() {
             {item.is_banned ? 'Banned' : 'Active'}
           </Text>
         </View>
-        {item.role !== 'admin' && (
+        {item.role !== 'admin' && item.id !== currentUser?.id && (
           <TouchableOpacity
             style={[styles.actionBtn, item.is_banned ? styles.unbanBtn : styles.banBtn]}
             onPress={() => toggleBan(item)}

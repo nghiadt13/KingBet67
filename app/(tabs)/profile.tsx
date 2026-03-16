@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Colors, Shadows } from '@/constants/colors';
+import { Colors } from '@/constants/colors';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase';
 import { UserStats } from '@/types/database';
@@ -51,15 +51,24 @@ export default function ProfileScreen() {
       Alert.alert('Lỗi', 'Vui lòng nhập số tiền hợp lệ');
       return;
     }
+    if (amount < 10000) {
+      Alert.alert('Lỗi', 'Tối thiểu 10,000đ');
+      return;
+    }
+    if (amount > 10000000) {
+      Alert.alert('Lỗi', 'Tối đa 10,000,000đ mỗi lần nạp');
+      return;
+    }
     setDepositing(true);
     try {
       const { error } = await supabase.rpc('deposit', { p_amount: amount });
       if (error) throw error;
       setDepositAmount('');
-      await fetchUserProfile();
-      Alert.alert('Thành công', `Đã nạp ${new Intl.NumberFormat('vi-VN').format(amount)}đ`);
+      await Promise.all([fetchUserProfile(), fetchStats()]);
+      Alert.alert('Thành công 🎉', `Đã nạp ${new Intl.NumberFormat('vi-VN').format(amount)}đ`);
     } catch (err: any) {
-      Alert.alert('Lỗi', err.message || 'Nạp tiền thất bại');
+      const msg = err.message || 'Nạp tiền thất bại';
+      Alert.alert('Lỗi', msg.includes('INVALID_AMOUNT') ? 'Số tiền không hợp lệ' : msg);
     } finally {
       setDepositing(false);
     }
@@ -80,10 +89,12 @@ export default function ProfileScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeftGroup}>
-          <MaterialIcons name="arrow-back" size={24} color={Colors.white} />
+          <MaterialIcons name="account-circle" size={24} color={Colors.neonGreen} />
           <Text style={styles.headerTitle}>Tài khoản</Text>
         </View>
-        <TouchableOpacity style={styles.settingsButton}>
+        <TouchableOpacity style={styles.settingsButton}
+          onPress={() => Alert.alert('Tính năng đang phát triển', 'Cài đặt sẽ sớm ra mắt!')}
+        >
           <MaterialIcons name="settings" size={22} color={Colors.white} />
         </TouchableOpacity>
       </View>
@@ -152,7 +163,7 @@ export default function ProfileScreen() {
               <MaterialIcons name="sports-soccer" size={22} color={Colors.neonGreen} />
             </View>
             <View>
-              <Text style={styles.statLabel}>Trận tham gia</Text>
+              <Text style={styles.statLabel}>Tổng kèo</Text>
               <Text style={styles.statValue}>{stats?.total_bets ?? 0}</Text>
             </View>
           </View>
@@ -166,12 +177,56 @@ export default function ProfileScreen() {
             </View>
           </View>
         </View>
+        <View style={styles.statsGrid}>
+          <View style={styles.statCard}>
+            <View style={[styles.statIconBox, { backgroundColor: 'rgba(34,197,94,0.1)' }]}>
+              <MaterialIcons name="check-circle" size={22} color={Colors.successGreen} />
+            </View>
+            <View>
+              <Text style={styles.statLabel}>Thắng</Text>
+              <Text style={[styles.statValue, { color: Colors.successGreen }]}>{stats?.won_count ?? 0}</Text>
+            </View>
+          </View>
+          <View style={styles.statCard}>
+            <View style={[styles.statIconBox, { backgroundColor: Colors.errorRedBg }]}>
+              <MaterialIcons name="cancel" size={22} color={Colors.errorRed} />
+            </View>
+            <View>
+              <Text style={styles.statLabel}>Thua</Text>
+              <Text style={[styles.statValue, { color: Colors.errorRed }]}>{stats?.lost_count ?? 0}</Text>
+            </View>
+          </View>
+        </View>
+        <View style={styles.statsGrid}>
+          <View style={styles.statCard}>
+            <View style={[styles.statIconBox, { backgroundColor: Colors.pendingYellowBg }]}>
+              <MaterialIcons name="schedule" size={22} color={Colors.pendingYellow} />
+            </View>
+            <View>
+              <Text style={styles.statLabel}>Đang chờ</Text>
+              <Text style={[styles.statValue, { color: Colors.pendingYellow }]}>{stats?.pending_count ?? 0}</Text>
+            </View>
+          </View>
+          <View style={styles.statCard}>
+            <View style={[styles.statIconBox, { backgroundColor: 'rgba(59,130,246,0.1)' }]}>
+              <MaterialIcons name="payments" size={22} color={Colors.blueAccent} />
+            </View>
+            <View>
+              <Text style={styles.statLabel}>Tổng thắng</Text>
+              <Text style={[styles.statValue, { color: Colors.blueAccent }]}>
+                {stats?.total_winnings ? formatBalance(stats.total_winnings) : '0'}đ
+              </Text>
+            </View>
+          </View>
+        </View>
 
         {/* Menu */}
         <View style={styles.menuSection}>
           <Text style={styles.menuSectionTitle}>Cài đặt tài khoản</Text>
 
-          <TouchableOpacity style={styles.menuItem}>
+          <TouchableOpacity style={styles.menuItem}
+            onPress={() => Alert.alert('Thông tin cá nhân', 'Tính năng đang phát triển')}
+          >
             <View style={styles.menuItemLeft}>
               <MaterialIcons name="person" size={22} color={Colors.textSecondary} />
               <Text style={styles.menuItemText}>Thông tin cá nhân</Text>
@@ -190,7 +245,9 @@ export default function ProfileScreen() {
             <MaterialIcons name="chevron-right" size={22} color={Colors.textMuted} />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.menuItem}>
+          <TouchableOpacity style={styles.menuItem}
+            onPress={() => Alert.alert('Lịch sử giao dịch', 'Tính năng đang phát triển')}
+          >
             <View style={styles.menuItemLeft}>
               <MaterialIcons name="history" size={22} color={Colors.textSecondary} />
               <Text style={styles.menuItemText}>Lịch sử giao dịch</Text>
@@ -198,7 +255,9 @@ export default function ProfileScreen() {
             <MaterialIcons name="chevron-right" size={22} color={Colors.textMuted} />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.menuItem}>
+          <TouchableOpacity style={styles.menuItem}
+            onPress={() => Alert.alert('Bảo mật', 'Tính năng đang phát triển')}
+          >
             <View style={styles.menuItemLeft}>
               <MaterialIcons name="security" size={22} color={Colors.textSecondary} />
               <Text style={styles.menuItemText}>Bảo mật</Text>
@@ -206,7 +265,9 @@ export default function ProfileScreen() {
             <MaterialIcons name="chevron-right" size={22} color={Colors.textMuted} />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.menuItem}>
+          <TouchableOpacity style={styles.menuItem}
+            onPress={() => Alert.alert('Hỗ trợ & Góp ý', 'Tính năng đang phát triển')}
+          >
             <View style={styles.menuItemLeft}>
               <MaterialIcons name="contact-support" size={22} color={Colors.textSecondary} />
               <Text style={styles.menuItemText}>Hỗ trợ & Góp ý</Text>

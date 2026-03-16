@@ -6,7 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
-  Image,
+
   ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -63,8 +63,7 @@ export default function BetsScreen() {
     ? bets
     : bets.filter((b) => b.status === activeTab);
 
-  const pendingBets = bets.filter((b) => b.status === 'PENDING');
-  const historyBets = bets.filter((b) => b.status !== 'PENDING');
+
 
   const getStatusConfig = (status: BetStatus) => {
     switch (status) {
@@ -94,6 +93,7 @@ export default function BetsScreen() {
 
   const tabs: { key: FilterTab; label: string }[] = [
     { key: 'all', label: 'Tất cả' },
+    { key: 'PENDING', label: 'Đang chờ' },
     { key: 'WON', label: 'Đã thắng' },
     { key: 'LOST', label: 'Đã thua' },
   ];
