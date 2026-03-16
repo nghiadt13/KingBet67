@@ -1,6 +1,6 @@
 # 11_REBUILD_CONFIG_PLAYBOOK.md
 
-Mục tiêu: lưu toàn bộ cấu hình để dựng lại một project mới cùng logic BetKing, sau đó chỉ cần dùng AI để build UI + chức năng.
+Mục tiêu: lưu toàn bộ cấu hình để dựng lại một project mới cùng logic KingBet67, sau đó chỉ cần dùng AI để build UI + chức năng.
 
 ---
 
@@ -49,7 +49,7 @@ Trong `Authentication -> URL Configuration`:
 - `Site URL`: `http://localhost:8081`
 - `Redirect URLs`:
   - `http://localhost:8081/**`
-  - `betking://**`
+  - `kingbet67://**`
 
 Nếu web chạy cổng khác, thay đúng cổng dev hiện tại.
 
@@ -110,7 +110,7 @@ npx expo start --clear
 ## 7. Prompt khởi tạo project mới (dùng cho AI)
 
 ```md
-Build a new Expo SDK 54 app with the same business logic as BetKing:
+Build a new Expo SDK 54 app with the same business logic as KingBet67:
 - Supabase auth + postgres + edge functions
 - 4 tables only: users, teams, matches, bets
 - Use RPC for atomic writes (place_bet, deposit)

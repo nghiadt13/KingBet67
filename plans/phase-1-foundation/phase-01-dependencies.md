@@ -48,9 +48,9 @@ Install runtime dependencies (supabase-js, zustand, date-fns, async-storage) và
    ```json
    {
      "expo": {
-       "name": "BetKing",
-       "slug": "betking",
-       "scheme": "betking"
+       "name": "KingBet67",
+       "slug": "kingbet67",
+       "scheme": "kingbet67"
      }
    }
    ```

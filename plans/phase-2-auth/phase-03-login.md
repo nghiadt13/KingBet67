@@ -9,7 +9,7 @@
 ## Overview
 
 - **Priority:** P1
-- **Status:** Completed ✅
+- **Status:** Not Started ⏳
 - **Effort:** 45m
 
 Replace placeholder với real login form. Email + password + validation + error display.
@@ -53,7 +53,7 @@ const handleLogin = async () => {
 ```
 
 2. UI structure (theo wireframe S-01):
-   - Logo: ⚽ BetKing / Football Bets
+   - Logo: ⚽ KingBet67 / Football Bets
    - TextInput: email (autoCapitalize: none, keyboardType: email-address)
    - TextInput: password (secureTextEntry)
    - Error message (nếu có): red text dưới form

@@ -1,7 +1,7 @@
 ---
 title: "Phase 5: Betting — Place Bet, Deposit, Bet History"
 description: "Đặt cược (bottom sheet), nạp tiền, lịch sử cược. RPC place_bet + deposit."
-status: completed
+status: partial
 priority: P1
 effort: 6h
 tags: [frontend, backend, rpc, betting]
@@ -24,9 +24,9 @@ Implement full betting flow:
 | #   | Phase                                     | Status  | Effort | Link                                    |
 | --- | ----------------------------------------- | ------- | ------ | --------------------------------------- |
 | 1   | SQL: RPC functions (place_bet + deposit)  | Completed ✅ | 0.5h   | [phase-01](./phase-01-rpc-functions.md) |
-| 2   | Bet Store + Place Bet Bottom Sheet (S-05) | Completed ✅ | 2.5h   | [phase-02](./phase-02-place-bet.md)     |
-| 3   | Deposit (S-09 Profile)                    | Completed ✅ | 1h     | [phase-03](./phase-03-deposit.md)       |
-| 4   | Bet History Screen (S-07)                 | Completed ✅ | 2h     | [phase-04](./phase-04-bet-history.md)   |
+| 2   | Bet Store + Place Bet Bottom Sheet (S-05) | Not Started ⏳ | 2.5h   | [phase-02](./phase-02-place-bet.md)     |
+| 3   | Deposit (S-09 Profile)                    | Not Started ⏳ | 1h     | [phase-03](./phase-03-deposit.md)       |
+| 4   | Bet History Screen (S-07)                 | Not Started ⏳ | 2h     | [phase-04](./phase-04-bet-history.md)   |
 
 ## Dependencies
 

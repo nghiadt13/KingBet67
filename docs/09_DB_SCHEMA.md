@@ -476,11 +476,11 @@ CREATE POLICY "Users can read own bets"
 
 ```sql
 -- Tạo admin account (chạy sau khi tạo auth user qua Supabase Dashboard)
--- 1. Tạo user qua Dashboard: email = admin@betking.com, password = admin123456
+-- 1. Tạo user qua Dashboard: email = admin@kingbet67.com, password = admin123456
 -- 2. Chạy SQL:
 UPDATE public.users
 SET role = 'admin'
-WHERE email = 'admin@betking.com';
+WHERE email = 'admin@kingbet67.com';
 ```
 
 ---

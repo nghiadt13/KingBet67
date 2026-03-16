@@ -19,7 +19,7 @@ Screen phức tạp nhất trong Phase 4: header, filter tabs, matchday selector
 
 ```
 ┌─────────────────────────────────┐
-│  ⚽ BetKing          Matchday 31│  ← Header (custom, not tab header)
+│  ⚽ KingBet67        Matchday 31│  ← Header (custom, not tab header)
 ├─────────────────────────────────┤
 │ Đang đá │ Sắp đá │ Kết thúc    │  ← Filter tabs (horizontal scroll)
 ├─────────────────────────────────┤
@@ -94,7 +94,7 @@ Replace placeholder → full Match List screen.
 
 **Key elements:**
 1. **Custom header** (hide tab header via `_layout.tsx` hoặc dùng `headerTitle`):
-   - Logo badge (small) + "BetKing" + matchday number
+   - Logo badge (small) + "KingBet67" + matchday number
 2. **Filter tabs** — `ScrollView horizontal`:
    - "All" | "Đang đá" | "Sắp đá" | "Kết thúc"
    - Active: primary bg, white text; Inactive: transparent bg, muted text

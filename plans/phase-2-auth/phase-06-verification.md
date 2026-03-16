@@ -16,12 +16,12 @@ Tạo admin account, test full auth flow end-to-end.
 
 1. **[MANUAL] Tạo admin account** trên Supabase Dashboard:
    - Authentication → Users → Add User
-   - Email: `admin@betking.com`, Password: `admin123456`
+   - Email: `admin@kingbet67.com`, Password: `admin123456`
    - Trigger sẽ tạo row trong `public.users` với role = 'user'
 
 2. **[MANUAL] Update role to admin:**
    ```sql
-   UPDATE public.users SET role = 'admin' WHERE email = 'admin@betking.com';
+   UPDATE public.users SET role = 'admin' WHERE email = 'admin@kingbet67.com';
    ```
 
 3. **Test flow — User registration:**
@@ -37,7 +37,7 @@ Tạo admin account, test full auth flow end-to-end.
    - Login lại → redirect về user-tabs
 
 5. **Test flow — Admin login:**
-   - Login: admin@betking.com / admin123456
+   - Login: admin@kingbet67.com / admin123456
    - → redirect to admin-tabs → 3 tabs visible (Dashboard, Users, System)
 
 6. **Test flow — Banned user:**

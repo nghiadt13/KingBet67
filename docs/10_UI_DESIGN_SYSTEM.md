@@ -197,7 +197,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 Khi auth đang initialize (kiểm tra session):
 - White background
 - Logo badge (soccer icon, blue bg, shadow glow)
-- "BetKing" text
+- "KingBet67" text
 - Small ActivityIndicator bên dưới
 
 ---
@@ -212,7 +212,7 @@ Cả Login và Register follow cùng 1 layout:
 │       ┌────────────┐               │
 │       │  ⚽ icon   │  ← Logo badge │
 │       └────────────┘               │
-│         BetKing                     │
+│         KingBet67                   │
 │       Football Bets                 │
 │                                     │
 │  Label                              │

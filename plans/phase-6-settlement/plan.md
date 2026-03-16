@@ -1,7 +1,7 @@
 ---
 title: "Phase 6: Settlement — Auto/Manual Settle Bets"
 description: "Edge Function settle-bets + hook vào sync-matches. Xử lý kết quả bet khi trận kết thúc."
-status: completed
+status: partial
 priority: P1
 effort: 3h
 tags: [backend, edge-function, settlement]
@@ -24,7 +24,7 @@ Khi trận chuyển sang FINISHED, cần so sánh bet_choice vs kết quả th�
 |---|-------|--------|--------|------|
 | 1 | Edge Function `settle-bets` | Completed ✅ | 1.5h | [phase-01](./phase-01-settle-function.md) |
 | 2 | Hook settle vào `sync-matches` | Completed ✅ | 0.5h | [phase-02](./phase-02-hook-sync.md) |
-| 3 | Test script + verify | Pending | 1h | [phase-03](./phase-03-test-verify.md) |
+| 3 | Test script + verify | Not Started ⏳ | 1h | [phase-03](./phase-03-test-verify.md) |
 
 ## Dependencies
 

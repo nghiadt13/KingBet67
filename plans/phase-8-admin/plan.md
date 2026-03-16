@@ -1,7 +1,7 @@
 ---
 title: "Phase 8: Admin — Dashboard, User Management, System Controls"
 description: "3 admin screens: dashboard stats, user ban/unban, sync/settle controls."
-status: completed
+status: partial
 priority: P1
 effort: 5h
 tags: [frontend, backend, admin, rpc]
@@ -22,21 +22,21 @@ created: 2026-03-15
 
 | Item | Status |
 |------|--------|
-| Admin tab layout (`(admin-tabs)/_layout.tsx`) | ✅ Done — 3 tabs: Dashboard, Users, System |
-| Role-based routing (`_layout.tsx` line 57-60) | ✅ Done — admin → `(admin-tabs)` |
+| Admin tab layout (`(admin-tabs)/_layout.tsx`) | ⏳ Not built — needs Phase 1 Tab Navigation |
+| Role-based routing (`_layout.tsx`) | ⏳ Not built — needs Phase 2 Auth Guard |
 | `is_admin()` SQL function | ✅ Done |
 | RLS admin read all users | ✅ Done — `auth.uid() = id OR is_admin()` |
 | RLS admin update users (ban) | ✅ Done — same policy |
-| Placeholder screens (3) | ✅ Done — need replacement |
+| Placeholder screens (3) | ⏳ Not built |
 
 ## Phases
 
 | # | Phase | Status | Effort | Link |
 |---|-------|--------|--------|------|
 | 1 | SQL: get_admin_stats RPC | Completed ✅ | 0.5h | [phase-01](./phase-01-admin-stats-rpc.md) |
-| 2 | S-A01: Admin Dashboard | Completed ✅ | 1.5h | [phase-02](./phase-02-dashboard.md) |
-| 3 | S-A02: User Management | Completed ✅ | 2h | [phase-03](./phase-03-user-management.md) |
-| 4 | S-A03: System Controls | Completed ✅ | 1h | [phase-04](./phase-04-system-controls.md) |
+| 2 | S-A01: Admin Dashboard | Not Started ⏳ | 1.5h | [phase-02](./phase-02-dashboard.md) |
+| 3 | S-A02: User Management | Not Started ⏳ | 2h | [phase-03](./phase-03-user-management.md) |
+| 4 | S-A03: System Controls | Not Started ⏳ | 1h | [phase-04](./phase-04-system-controls.md) |
 
 ## Dependencies
 

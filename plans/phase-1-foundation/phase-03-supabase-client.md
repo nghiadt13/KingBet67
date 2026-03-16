@@ -9,7 +9,7 @@
 ## Overview
 
 - **Priority:** P1
-- **Status:** Completed ✅
+- **Status:** Partial ⏳ (.env đã có, nhưng lib/supabase.ts và types/database.ts chưa tạo)
 - **Effort:** 30m
 
 Tạo Supabase client singleton, TypeScript types cho DB schema, env config.
@@ -73,9 +73,9 @@ Tạo Supabase client singleton, TypeScript types cho DB schema, env config.
 ## Todo
 
 - [x] Tạo `.env` với `EXPO_PUBLIC_SUPABASE_URL` + `EXPO_PUBLIC_SUPABASE_KEY` (per latest Supabase docs, thay `constants/supabase.ts`)
-- [x] Tạo `types/database.ts` với types cho 4 tables + enums + Database generic
-- [x] Tạo `lib/supabase.ts` với client singleton + SSR-safe AsyncStorage wrapper
-- [x] Verify: import supabase → no TypeScript errors
+- [ ] Tạo `types/database.ts` với types cho 4 tables + enums + Database generic
+- [ ] Tạo `lib/supabase.ts` với client singleton + SSR-safe AsyncStorage wrapper
+- [ ] Verify: import supabase → no TypeScript errors
 
 ## Success Criteria
 

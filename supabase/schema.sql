@@ -1,5 +1,5 @@
 -- ============================================
--- BetKing DB Schema — IDEMPOTENT
+-- KingBet67 DB Schema — IDEMPOTENT
 -- Safe to run multiple times: IF NOT EXISTS, OR REPLACE, DROP IF EXISTS
 -- Run on Supabase Dashboard → SQL Editor
 -- Source: docs/09_DB_SCHEMA.md

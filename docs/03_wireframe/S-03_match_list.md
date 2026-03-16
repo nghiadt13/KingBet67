@@ -2,7 +2,7 @@
 
 ```
 ┌─────────────────────────────────┐
-│  ⚽ BetKing          Matchday 31│  ← Header: logo + matchday hiện tại
+│  ⚽ KingBet67          Matchday 31│  ← Header: logo + matchday hiện tại
 ├─────────────────────────────────┤
 │ 🔴 Đang đá │ ⏰ Sắp đá │ ✅ KT │  ← Filter tabs
 ├─────────────────────────────────┤

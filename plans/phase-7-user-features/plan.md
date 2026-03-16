@@ -1,7 +1,7 @@
 ---
 title: "Phase 7: User Features — Leaderboard, Profile Stats, RLS"
 description: "RPC get_user_stats + get_leaderboard, S-08 Leaderboard, Profile stats, RLS policies."
-status: completed
+status: partial
 priority: P1
 effort: 4h
 tags: [frontend, backend, rpc, rls]
@@ -17,15 +17,15 @@ Hoàn thiện các tính năng user-facing:
 2. **S-08:** Leaderboard screen (replace placeholder)
 3. **S-09:** Profile stats section (enhance existing profile)
 
-> **Lưu ý:** S-07 Bet History đã hoàn thành trong Phase 5 → skip.
+> **Lưu ý:** S-07 Bet History sẽ hoàn thành trong Phase 5.
 
 ## Phases
 
 | # | Phase | Status | Effort | Link |
 |---|-------|--------|--------|------|
 | 1 | SQL: RPCs + RLS policies | Completed ✅ | 0.5h | [phase-01](./phase-01-sql-rpc-rls.md) |
-| 2 | S-08 Leaderboard | Completed ✅ | 2h | [phase-02](./phase-02-leaderboard.md) |
-| 3 | S-09 Profile Stats | Completed ✅ | 1.5h | [phase-03](./phase-03-profile-stats.md) |
+| 2 | S-08 Leaderboard | Not Started ⏳ | 2h | [phase-02](./phase-02-leaderboard.md) |
+| 3 | S-09 Profile Stats | Not Started ⏳ | 1.5h | [phase-03](./phase-03-profile-stats.md) |
 
 ## Dependencies
 

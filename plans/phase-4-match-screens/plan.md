@@ -1,7 +1,7 @@
 ---
 title: "Phase 4: Match Screens — S-03, S-04, S-06"
 description: "Hiển thị trận đấu, chi tiết + odds, bảng xếp hạng. Replace 3 placeholder screens."
-status: completed
+status: not-started
 priority: P1
 effort: 5h
 tags: [frontend, screens, ui]
@@ -21,10 +21,10 @@ Replace 3 placeholder screens bằng UI thật:
 
 | # | Phase | Status | Effort | Link |
 |---|-------|--------|--------|------|
-| 1 | Data Layer (store + types) | Completed ✅ | 1h | [phase-01](./phase-01-data-layer.md) |
-| 2 | S-03: Match List + Match Card | Completed ✅ | 2h | [phase-02](./phase-02-match-list.md) |
-| 3 | S-04: Match Detail + Odds | Completed ✅ | 1.5h | [phase-03](./phase-03-match-detail.md) |
-| 4 | S-06: Standings Table | Completed ✅ | 0.5h | [phase-04](./phase-04-standings.md) |
+| 1 | Data Layer (store + types) | Not Started ⏳ | 1h | [phase-01](./phase-01-data-layer.md) |
+| 2 | S-03: Match List + Match Card | Not Started ⏳ | 2h | [phase-02](./phase-02-match-list.md) |
+| 3 | S-04: Match Detail + Odds | Not Started ⏳ | 1.5h | [phase-03](./phase-03-match-detail.md) |
+| 4 | S-06: Standings Table | Not Started ⏳ | 0.5h | [phase-04](./phase-04-standings.md) |
 
 ## Dependencies
 

@@ -9,7 +9,7 @@
 ## Overview
 
 - **Priority:** P1
-- **Status:** Completed ✅
+- **Status:** Not Started ⏳
 - **Effort:** 30m
 
 Replace placeholder with register form. Username + email + password + confirm.
@@ -65,7 +65,7 @@ const handleRegister = async () => {
 ```
 
 2. UI structure (theo wireframe S-02):
-   - Logo: ⚽ BetKing / Football Bets
+   - Logo: ⚽ KingBet67 / Football Bets
    - TextInput: username
    - TextInput: email
    - TextInput: password (secureTextEntry)

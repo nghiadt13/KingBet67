@@ -1,6 +1,6 @@
 ---
 title: "Phase 1: Foundation — Project Setup"
-description: "Setup Expo project, Supabase DB, Supabase client, TypeScript types, and tab navigation skeleton for BetKing app"
+description: "Setup Expo project, Supabase DB, Supabase client, TypeScript types, and tab navigation skeleton for KingBet67 app"
 status: in-progress
 priority: P1
 effort: 3h
@@ -20,10 +20,10 @@ Setup the foundational layer: cài dependencies, kết nối Supabase, tạo DB 
 | # | Phase | Status | Effort | Link |
 |---|-------|--------|--------|------|
 | 1 | Install Dependencies & Config | Completed ✅ | 30m | [phase-01](./phase-01-dependencies.md) |
-| 2 | Supabase DB Schema | In Progress ⏳ | 45m | [phase-02](./phase-02-db-schema.md) |
-| 3 | Supabase Client & Types | Completed ✅ | 30m | [phase-03](./phase-03-supabase-client.md) |
-| 4 | Tab Navigation Skeleton | Completed ✅ | 45m | [phase-04](./phase-04-navigation.md) |
-| 5 | Verification | Completed ✅ | 30m | [phase-05](./phase-05-verification.md) |
+| 2 | Supabase DB Schema | Completed ✅ | 45m | [phase-02](./phase-02-db-schema.md) |
+| 3 | Supabase Client & Types | Not Started ⏳ | 30m | [phase-03](./phase-03-supabase-client.md) |
+| 4 | Tab Navigation Skeleton | Not Started ⏳ | 45m | [phase-04](./phase-04-navigation.md) |
+| 5 | Verification | Not Started ⏳ | 30m | [phase-05](./phase-05-verification.md) |
 
 ## Dependencies
 

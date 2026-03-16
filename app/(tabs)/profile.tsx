@@ -1,0 +1,299 @@
+import { useEffect, useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  RefreshControl,
+  ActivityIndicator,
+  Alert,
+  TextInput,
+} from 'react-native';
+import { useRouter } from 'expo-router';
+import { MaterialIcons } from '@expo/vector-icons';
+import { Colors, Shadows } from '@/constants/colors';
+import { useAuthStore } from '@/stores/authStore';
+import { supabase } from '@/lib/supabase';
+import { UserStats } from '@/types/database';
+
+export default function ProfileScreen() {
+  const router = useRouter();
+  const { user, signOut, fetchUserProfile } = useAuthStore();
+  const [stats, setStats] = useState<UserStats | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [depositAmount, setDepositAmount] = useState('');
+  const [depositing, setDepositing] = useState(false);
+
+  const fetchStats = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.rpc('get_user_stats');
+      if (error) throw error;
+      setStats(data as unknown as UserStats);
+    } catch (err) {
+      console.error('Error fetching stats:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStats();
+  }, []);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([fetchStats(), fetchUserProfile()]);
+    setRefreshing(false);
+  }, []);
+
+  const handleDeposit = async () => {
+    const amount = parseInt(depositAmount);
+    if (!amount || amount <= 0) {
+      Alert.alert('Lỗi', 'Vui lòng nhập số tiền hợp lệ');
+      return;
+    }
+    setDepositing(true);
+    try {
+      const { error } = await supabase.rpc('deposit', { p_amount: amount });
+      if (error) throw error;
+      setDepositAmount('');
+      await fetchUserProfile();
+      Alert.alert('Thành công', `Đã nạp ${new Intl.NumberFormat('vi-VN').format(amount)}đ`);
+    } catch (err: any) {
+      Alert.alert('Lỗi', err.message || 'Nạp tiền thất bại');
+    } finally {
+      setDepositing(false);
+    }
+  };
+
+  const handleSignOut = () => {
+    Alert.alert('Đăng xuất', 'Bạn chắc chắn muốn đăng xuất?', [
+      { text: 'Hủy', style: 'cancel' },
+      { text: 'Đăng xuất', style: 'destructive', onPress: signOut },
+    ]);
+  };
+
+  const formatBalance = (balance: number) =>
+    new Intl.NumberFormat('vi-VN').format(balance);
+
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerLeftGroup}>
+          <MaterialIcons name="arrow-back" size={24} color={Colors.white} />
+          <Text style={styles.headerTitle}>Tài khoản</Text>
+        </View>
+        <TouchableOpacity style={styles.settingsButton}>
+          <MaterialIcons name="settings" size={22} color={Colors.white} />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh}
+            tintColor={Colors.neonGreen} colors={[Colors.neonGreen]}
+          />
+        }
+      >
+        {/* Avatar Section */}
+        <View style={styles.avatarSection}>
+          <View style={styles.avatarCircle}>
+            <MaterialIcons name="person" size={48} color={Colors.neonGreen} />
+          </View>
+          <Text style={styles.username}>{user?.username || 'KingBet67'}</Text>
+          <Text style={styles.email}>{user?.email || ''}</Text>
+        </View>
+
+        {/* Balance Card */}
+        <View style={styles.balanceCard}>
+          <View style={styles.balanceCardOverlay}>
+            <MaterialIcons name="account-balance-wallet" size={80} color={Colors.white}
+              style={{ opacity: 0.05, position: 'absolute', top: -10, right: -10 }}
+            />
+          </View>
+          <Text style={styles.balanceLabel}>Số dư hiện tại</Text>
+          <Text style={styles.balanceAmount}>
+            {user ? formatBalance(user.balance) : '0'}{' '}
+            <Text style={styles.balanceCurrency}>đ</Text>
+          </Text>
+
+          {/* Deposit */}
+          <View style={styles.depositRow}>
+            <TextInput
+              style={styles.depositInput}
+              placeholder="Nhập số tiền..."
+              placeholderTextColor={Colors.textMuted}
+              value={depositAmount}
+              onChangeText={setDepositAmount}
+              keyboardType="number-pad"
+            />
+            <TouchableOpacity
+              style={styles.depositButton}
+              onPress={handleDeposit}
+              disabled={depositing}
+            >
+              {depositing ? (
+                <ActivityIndicator color={Colors.black} size="small" />
+              ) : (
+                <>
+                  <MaterialIcons name="add-circle" size={18} color={Colors.black} />
+                  <Text style={styles.depositButtonText}>Nạp điểm</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Stats Grid */}
+        <View style={styles.statsGrid}>
+          <View style={styles.statCard}>
+            <View style={styles.statIconBox}>
+              <MaterialIcons name="sports-soccer" size={22} color={Colors.neonGreen} />
+            </View>
+            <View>
+              <Text style={styles.statLabel}>Trận tham gia</Text>
+              <Text style={styles.statValue}>{stats?.total_bets ?? 0}</Text>
+            </View>
+          </View>
+          <View style={styles.statCard}>
+            <View style={styles.statIconBox}>
+              <MaterialIcons name="trending-up" size={22} color={Colors.neonGreen} />
+            </View>
+            <View>
+              <Text style={styles.statLabel}>Tỷ lệ thắng</Text>
+              <Text style={styles.statValue}>{stats?.win_rate ? `${Math.round(stats.win_rate)}%` : '0%'}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Menu */}
+        <View style={styles.menuSection}>
+          <Text style={styles.menuSectionTitle}>Cài đặt tài khoản</Text>
+
+          <TouchableOpacity style={styles.menuItem}>
+            <View style={styles.menuItemLeft}>
+              <MaterialIcons name="person" size={22} color={Colors.textSecondary} />
+              <Text style={styles.menuItemText}>Thông tin cá nhân</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={22} color={Colors.textMuted} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => router.push('/leaderboard')}
+          >
+            <View style={styles.menuItemLeft}>
+              <MaterialIcons name="leaderboard" size={22} color={Colors.textSecondary} />
+              <Text style={styles.menuItemText}>Bảng xếp hạng</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={22} color={Colors.textMuted} />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.menuItem}>
+            <View style={styles.menuItemLeft}>
+              <MaterialIcons name="history" size={22} color={Colors.textSecondary} />
+              <Text style={styles.menuItemText}>Lịch sử giao dịch</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={22} color={Colors.textMuted} />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.menuItem}>
+            <View style={styles.menuItemLeft}>
+              <MaterialIcons name="security" size={22} color={Colors.textSecondary} />
+              <Text style={styles.menuItemText}>Bảo mật</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={22} color={Colors.textMuted} />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.menuItem}>
+            <View style={styles.menuItemLeft}>
+              <MaterialIcons name="contact-support" size={22} color={Colors.textSecondary} />
+              <Text style={styles.menuItemText}>Hỗ trợ & Góp ý</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={22} color={Colors.textMuted} />
+          </TouchableOpacity>
+
+          <View style={styles.menuDivider} />
+
+          <TouchableOpacity style={styles.logoutItem} onPress={handleSignOut}>
+            <View style={styles.menuItemLeft}>
+              <MaterialIcons name="logout" size={22} color={Colors.errorRed} />
+              <Text style={styles.logoutText}>Đăng xuất</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: Colors.darkBg },
+  header: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 12, paddingTop: 50,
+    borderBottomWidth: 1, borderBottomColor: Colors.border,
+  },
+  headerLeftGroup: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  headerTitle: { color: Colors.white, fontSize: 17, fontWeight: '700' },
+  settingsButton: { padding: 8, borderRadius: 20 },
+  scrollContent: { paddingBottom: 20 },
+  // Avatar
+  avatarSection: { alignItems: 'center', paddingVertical: 24, gap: 6 },
+  avatarCircle: {
+    width: 100, height: 100, borderRadius: 50,
+    borderWidth: 3, borderColor: Colors.neonGreen,
+    backgroundColor: Colors.surfaceDark,
+    justifyContent: 'center', alignItems: 'center', marginBottom: 8,
+  },
+  username: { color: Colors.white, fontSize: 22, fontWeight: '700' },
+  email: { color: Colors.textSecondary, fontSize: 13 },
+  // Balance
+  balanceCard: {
+    marginHorizontal: 16, borderRadius: 16, padding: 20,
+    backgroundColor: Colors.surfaceDark, borderWidth: 1, borderColor: Colors.border,
+    overflow: 'hidden',
+  },
+  balanceCardOverlay: { position: 'absolute', top: 0, right: 0, bottom: 0, width: 100 },
+  balanceLabel: { color: Colors.textSecondary, fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.8 },
+  balanceAmount: { color: Colors.white, fontSize: 28, fontWeight: '900', marginTop: 4, marginBottom: 18 },
+  balanceCurrency: { color: Colors.neonGreen, fontSize: 17 },
+  depositRow: { flexDirection: 'row', gap: 10 },
+  depositInput: {
+    flex: 1, backgroundColor: Colors.darkBg, borderRadius: 10,
+    paddingHorizontal: 14, paddingVertical: 10, color: Colors.white, fontSize: 14,
+    borderWidth: 1, borderColor: 'rgba(100,116,139,0.2)',
+  },
+  depositButton: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: Colors.neonGreen, paddingHorizontal: 16, borderRadius: 10,
+  },
+  depositButtonText: { color: Colors.black, fontSize: 13, fontWeight: '700' },
+  // Stats
+  statsGrid: { flexDirection: 'row', paddingHorizontal: 16, gap: 12, marginTop: 20 },
+  statCard: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: 'rgba(30,41,59,0.5)', borderWidth: 1, borderColor: Colors.border,
+    borderRadius: 14, padding: 14,
+  },
+  statIconBox: { backgroundColor: Colors.neonGreenBg, padding: 8, borderRadius: 10 },
+  statLabel: { color: Colors.textSecondary, fontSize: 11 },
+  statValue: { color: Colors.white, fontSize: 17, fontWeight: '700' },
+  // Menu
+  menuSection: { paddingHorizontal: 16, marginTop: 28 },
+  menuSectionTitle: { color: Colors.textMuted, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 10, marginLeft: 4 },
+  menuItem: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    padding: 14, backgroundColor: 'rgba(30,41,59,0.2)', borderRadius: 12,
+    marginBottom: 4,
+  },
+  menuItemLeft: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  menuItemText: { color: Colors.white, fontSize: 14, fontWeight: '500' },
+  menuDivider: { height: 1, backgroundColor: Colors.border, marginVertical: 8, opacity: 0.4 },
+  logoutItem: {
+    flexDirection: 'row', alignItems: 'center', padding: 14,
+    backgroundColor: 'rgba(239,68,68,0.08)', borderRadius: 12,
+  },
+  logoutText: { color: Colors.errorRed, fontSize: 14, fontWeight: '700' },
+});

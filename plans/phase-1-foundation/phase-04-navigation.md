@@ -8,7 +8,7 @@
 ## Overview
 
 - **Priority:** P1
-- **Status:** Completed ✅
+- **Status:** Not Started ⏳
 - **Effort:** 45m
 
 Tạo navigation structure: User tabs (5 tabs), Admin tabs (3 tabs), auth screens group. Mỗi screen hiện placeholder. Xóa template screens không dùng.
@@ -97,13 +97,13 @@ Tạo navigation structure: User tabs (5 tabs), Admin tabs (3 tabs), auth screen
 
 ## Todo
 
-- [x] Xóa `app/(tabs)/` + `app/modal.tsx`
-- [x] Tạo root `_layout.tsx` với 3 route groups
-- [x] Tạo `(auth)` group: layout + login + register
-- [x] Tạo `(user-tabs)` group: layout + 5 tab screens
-- [x] Tạo `(admin-tabs)` group: layout + 3 tab screens
-- [x] Tạo `app/match/[id].tsx` match detail screen
-- [x] Verify: app chạy, tabs chuyển được, navigate giữa screens OK
+- [ ] Xóa `app/(tabs)/` + `app/modal.tsx`
+- [ ] Tạo root `_layout.tsx` với 3 route groups
+- [ ] Tạo `(auth)` group: layout + login + register
+- [ ] Tạo `(user-tabs)` group: layout + 5 tab screens
+- [ ] Tạo `(admin-tabs)` group: layout + 3 tab screens
+- [ ] Tạo `app/match/[id].tsx` match detail screen
+- [ ] Verify: app chạy, tabs chuyển được, navigate giữa screens OK
 
 ## Success Criteria
 

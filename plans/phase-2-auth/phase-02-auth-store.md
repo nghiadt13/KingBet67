@@ -9,7 +9,7 @@
 ## Overview
 
 - **Priority:** P1
-- **Status:** Completed ✅
+- **Status:** Not Started ⏳
 - **Effort:** 45m
 
 Zustand store quản lý auth state: session, user profile, loading, errors.

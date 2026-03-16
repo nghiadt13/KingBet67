@@ -8,7 +8,7 @@
 ## Overview
 
 - **Priority:** P1
-- **Status:** In Progress ⏳ (SQL prepared, needs manual run on Dashboard)
+- **Status:** Completed ✅ (SQL đã chạy trên Supabase, data đã có)
 - **Effort:** 45m
 
 Tạo 4 tables, indexes, helper function `is_admin()` trên Supabase Dashboard (SQL Editor). Chưa tạo RPCs, triggers, RLS (để Phase 2+ khi cần).
@@ -50,13 +50,13 @@ Tạo 4 tables, indexes, helper function `is_admin()` trên Supabase Dashboard (
 
 ## Todo
 
-- [ ] Tạo table `users`
-- [ ] Tạo table `teams`
-- [ ] Tạo table `matches`
-- [ ] Tạo table `bets`
-- [ ] Tạo 7 indexes
-- [ ] Tạo function `is_admin()`
-- [ ] Verify trên Dashboard: 4 tables hiện đúng
+- [x] Tạo table `users`
+- [x] Tạo table `teams`
+- [x] Tạo table `matches`
+- [x] Tạo table `bets`
+- [x] Tạo 7 indexes
+- [x] Tạo function `is_admin()`
+- [x] Verify trên Dashboard: 4 tables hiện đúng
 
 ## Success Criteria
 

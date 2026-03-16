@@ -1,13 +1,13 @@
-# BetKing — Phân Tích Ngữ Cảnh Project
+# KingBet67 — Phân Tích Ngữ Cảnh Project
 
-> **Mục đích:** Tổng hợp toàn bộ ngữ cảnh dự án BetKing — tính năng, kiến trúc, cách chạy, cấu trúc code.
+> **Mục đích:** Tổng hợp toàn bộ ngữ cảnh dự án KingBet67 — tính năng, kiến trúc, cách chạy, cấu trúc code.
 > **Cập nhật lần cuối:** 16/03/2026
 
 ---
 
 ## 1. Tổng Quan
 
-**BetKing** là app mobile mô phỏng cá cược bóng đá bằng tiền ảo — đồ án môn MMA301.
+**KingBet67** là app mobile mô phỏng cá cược bóng đá bằng tiền ảo — đồ án môn MMA301.
 
 - User đặt cược các trận đấu **thật** (Premier League, data từ [football-data.org](https://www.football-data.org/))
 - Hệ thống tự tính odds dựa trên bảng xếp hạng, tự trả thưởng khi trận kết thúc
@@ -133,43 +133,85 @@ Auto Settle:
 
 ## 4. Cấu Trúc Code
 
+### Trạng thái hiện tại (16/03/2026)
+
+> ⚠️ Frontend đang ở trạng thái **default Expo template**. Backend (Supabase) đã cấu hình xong.
+
 ```
-betking/
-├── app/                          # Expo Router — tất cả screens
+KingBet67/
+├── app/                          # Expo Router — hiện chỉ có default template
+│   ├── _layout.tsx               # Root layout (mặc định — chưa có auth/role routing)
+│   ├── modal.tsx                 # Modal screen (template)
+│   └── (tabs)/                   # Default tabs (chưa đổi thành user-tabs/admin-tabs)
+│       ├── _layout.tsx           # Tab layout (template)
+│       ├── index.tsx             # Tab 1 (template)
+│       └── explore.tsx           # Tab 2 (template)
+│
+├── components/                   # ⏳ Trống — chưa có custom components
+│   └── ui/                      # Thư mục UI rỗng
+│
+├── constants/
+│   └── theme.ts                  # Color theme constants
+│
+├── hooks/                        # Default Expo hooks
+│   ├── use-color-scheme.ts
+│   ├── use-color-scheme.web.ts
+│   └── use-theme-color.ts
+│
+├── supabase/                     # ✅ Backend — đã hoàn thành
+│   ├── schema.sql                # Full DB schema (4 tables, RPCs, RLS, triggers, seed)
+│   └── functions/                # Supabase Edge Functions (Deno)
+│       ├── sync-matches/         # ✅ Sync trận đấu từ football-data.org
+│       ├── settle-bets/          # ✅ Xử lý kết quả cược
+│       └── _shared/              # Shared utilities (CORS)
+│
+├── docs/                         # 10+ tài liệu thiết kế chi tiết
+├── plans/                        # 9 phases kế hoạch phát triển
+├── scripts/                      # Utility scripts
+├── assets/                       # Images, fonts
+├── .env                          # ✅ Supabase URL + Key + API key
+├── package.json                  # Dependencies (đã install)
+└── tsconfig.json                 # TypeScript config
+```
+
+### Cấu trúc mục tiêu (cần build)
+
+```
+KingBet67/
+├── app/
 │   ├── _layout.tsx               # Root layout (auth check, routing theo role)
 │   ├── (auth)/                   # Auth group (không cần đăng nhập)
 │   │   ├── _layout.tsx
 │   │   ├── login.tsx             # S-01: Màn hình đăng nhập
 │   │   └── register.tsx          # S-02: Màn hình đăng ký
 │   ├── (user-tabs)/              # User tab bar (5 tabs)
-│   │   ├── _layout.tsx           # Tab bar config
+│   │   ├── _layout.tsx
 │   │   ├── index.tsx             # S-03: Home — Match List
 │   │   ├── standings.tsx         # S-06: Bảng xếp hạng giải
 │   │   ├── history.tsx           # S-07: Lịch sử cược
-│   │   ├── leaderboard.tsx       # S-08: Leaderboard người chơi
+│   │   ├── leaderboard.tsx       # S-08: Leaderboard
 │   │   └── profile.tsx           # S-09: Profile + Nạp tiền
 │   ├── (admin-tabs)/             # Admin tab bar
-│   │   ├── _layout.tsx           # Tab bar config
+│   │   ├── _layout.tsx
 │   │   ├── index.tsx             # S-A01: Admin Dashboard
 │   │   ├── users.tsx             # S-A02: Quản lý users
-│   │   ├── system.tsx            # S-A03: Sync/Settle controls
-│   │   └── settings.tsx          # Admin settings
-│   └── match/                    # Stack navigation
+│   │   └── system.tsx            # S-A03: Sync/Settle controls
+│   └── match/
 │       └── [id].tsx              # S-04: Chi tiết trận + xem odds
 │
 ├── components/                   # Shared UI components
-│   ├── match-card.tsx            # Card hiển thị trận (danh sách)
-│   ├── bet-card.tsx              # Card lịch sử cược
-│   ├── place-bet-sheet.tsx       # Bottom sheet đặt cược (S-05)
-│   ├── odds-section.tsx          # Section hiển thị odds
-│   ├── correct-score-grid.tsx    # Grid chọn tỉ số chính xác
-│   ├── status-badge.tsx          # Badge trạng thái trận
-│   └── ui/                      # Base UI components
+│   ├── match-card.tsx
+│   ├── bet-card.tsx
+│   ├── place-bet-sheet.tsx       # S-05: Bottom sheet đặt cược
+│   ├── odds-section.tsx
+│   ├── correct-score-grid.tsx
+│   ├── status-badge.tsx
+│   └── ui/
 │
 ├── stores/                       # Zustand state management
-│   ├── authStore.ts              # Auth (user, session, login/logout/register)
-│   ├── matchStore.ts             # Matches + standings data
-│   └── betStore.ts               # Bets (place, fetch history, stats)
+│   ├── authStore.ts
+│   ├── matchStore.ts
+│   └── betStore.ts
 │
 ├── lib/
 │   └── supabase.ts               # Supabase client singleton
@@ -177,20 +219,7 @@ betking/
 ├── types/
 │   └── database.ts               # TypeScript types matching DB schema
 │
-├── supabase/
-│   ├── schema.sql                # Full DB schema (tables, indexes, RLS, RPCs, triggers)
-│   └── functions/                # Supabase Edge Functions (Deno)
-│       ├── sync-matches/         # Sync trận đấu từ football-data.org
-│       ├── settle-bets/          # Xử lý kết quả cược
-│       └── _shared/              # Shared utilities giữa các functions
-│
-├── docs/                         # 10+ tài liệu thiết kế chi tiết
-├── constants/                    # App constants, colors, config
-├── hooks/                        # Custom React hooks
-├── assets/                       # Images, fonts
-├── AGENTS.md                     # Rules cho AI agents
-├── package.json                  # Dependencies
-└── tsconfig.json                 # TypeScript config
+└── ... (giữ nguyên các thư mục khác)
 ```
 
 ---
@@ -313,8 +342,8 @@ supabase functions deploy sync-matches
 supabase functions deploy settle-bets
 
 # 3. Seed admin account
-#    Tạo user admin@betking.com qua Supabase Dashboard
-#    Chạy SQL: UPDATE public.users SET role = 'admin' WHERE email = 'admin@betking.com';
+#    Tạo user admin@kingbet67.com qua Supabase Dashboard
+#    Chạy SQL: UPDATE public.users SET role = 'admin' WHERE email = 'admin@kingbet67.com';
 
 # 4. Setup cron (cron-job.org)
 #    URL: https://xxx.supabase.co/functions/v1/sync-matches

@@ -1,7 +1,7 @@
 ---
 title: "Phase 2: Auth — Signup, Login, Routing"
 description: "Implement Supabase Auth flow: DB trigger, Zustand auth store, login/register screens, role-based routing, banned user check"
-status: in-progress
+status: partial
 priority: P1
 effort: 3.5h
 branch: main
@@ -21,11 +21,11 @@ Sau phase này: user register → auto login → thấy user tabs. Admin login �
 | # | Phase | Status | Effort | Link |
 |---|-------|--------|--------|------|
 | 1 | DB Trigger + RLS | Completed ✅ | 30m | [phase-01](./phase-01-db-trigger.md) |
-| 2 | Auth Store (Zustand) | Completed ✅ | 45m | [phase-02](./phase-02-auth-store.md) |
-| 3 | Login Screen | Completed ✅ | 45m | [phase-03](./phase-03-login.md) |
-| 4 | Register Screen | Completed ✅ | 30m | [phase-04](./phase-04-register.md) |
-| 5 | Auth Guard + Routing | Completed ✅ | 30m | [phase-05](./phase-05-auth-guard.md) |
-| 6 | Verification | In Progress ⏳ | 30m | [phase-06](./phase-06-verification.md) |
+| 2 | Auth Store (Zustand) | Not Started ⏳ | 45m | [phase-02](./phase-02-auth-store.md) |
+| 3 | Login Screen | Not Started ⏳ | 45m | [phase-03](./phase-03-login.md) |
+| 4 | Register Screen | Not Started ⏳ | 30m | [phase-04](./phase-04-register.md) |
+| 5 | Auth Guard + Routing | Not Started ⏳ | 30m | [phase-05](./phase-05-auth-guard.md) |
+| 6 | Verification | Not Started ⏳ | 30m | [phase-06](./phase-06-verification.md) |
 
 ## Dependencies
 

@@ -8,7 +8,7 @@
 ## Overview
 
 - **Priority:** P1
-- **Status:** Completed ✅
+- **Status:** Not Started ⏳
 - **Effort:** 30m
 
 Modify root layout: initialize auth, redirect based on session + role.

@@ -1,50 +1,86 @@
-# Welcome to your Expo app 👋
+# KingBet67 ⚽
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+> App mobile mô phỏng cá cược bóng đá bằng tiền ảo — Đồ án môn MMA301.
 
-## Get started
+## Mô tả
 
-1. Install dependencies
+KingBet67 là ứng dụng React Native cho phép user đặt cược các trận đấu **Premier League** (data thật từ football-data.org) bằng tiền ảo. Hệ thống tự tính odds dựa trên bảng xếp hạng và tự động trả thưởng khi trận kết thúc.
 
-   ```bash
-   npm install
-   ```
+### Tính năng chính
 
-2. Start the app
+- 🔐 Đăng ký / Đăng nhập (email + password)
+- 💰 Nạp tiền ảo (không giới hạn)
+- ⚽ Xem trận đấu Premier League (lịch thi đấu, kết quả)
+- 🎰 Đặt cược 5 loại kèo (1X2, tỉ số, tài/xỉu, BTTS, hiệp 1)
+- 📋 Lịch sử cược cá nhân
+- 🥇 Bảng xếp hạng người chơi (leaderboard)
+- 👤 Hồ sơ cá nhân + thống kê
+- 📊 Admin Dashboard (thống kê, quản lý users, sync/settle)
 
-   ```bash
-   npx expo start
-   ```
+## Tech Stack
 
-In the output, you'll find options to open the app in a
+| Layer | Công nghệ |
+|-------|-----------|
+| **Frontend** | Expo SDK 54, React Native 0.81, Expo Router v4, TypeScript, Zustand |
+| **Backend** | Supabase (Auth + PostgreSQL + Edge Functions) |
+| **Data** | [football-data.org](https://www.football-data.org/) API (Premier League) |
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## Cài đặt & Chạy
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+### Prerequisites
 
-## Get a fresh project
+- Node.js (LTS)
+- Expo Go app trên điện thoại (hoặc Android/iOS emulator)
+- Supabase project (đã setup)
 
-When you're ready, run:
+### 1. Install dependencies
 
 ```bash
-npm run reset-project
+npm install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### 2. Cấu hình `.env`
 
-## Learn more
+```env
+EXPO_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
+EXPO_PUBLIC_SUPABASE_KEY=your-anon-key
 
-To learn more about developing your project with Expo, look at the following resources:
+# Server-side only
+FOOTBALL_DATA_API_KEY=your-api-key
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+### 3. Setup Database
 
-## Join the community
+Chạy `supabase/schema.sql` trên Supabase Dashboard → SQL Editor.
 
-Join our community of developers creating universal apps.
+### 4. Chạy app
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```bash
+npx expo start
+```
+
+Quét QR bằng Expo Go hoặc chạy trên emulator.
+
+## Cấu trúc Project
+
+```
+KingBet67/
+├── app/              # Screens (Expo Router)
+├── components/       # Shared UI components
+├── constants/        # Theme, colors
+├── hooks/            # Custom React hooks
+├── supabase/         # DB schema + Edge Functions
+├── docs/             # Tài liệu thiết kế
+└── plans/            # Kế hoạch phát triển (9 phases)
+```
+
+## Tài liệu
+
+Xem thư mục `docs/` để biết chi tiết:
+- [Problem & Vision](docs/01_PROBLEM.md)
+- [Use Cases](docs/02_USE_CASES.md)
+- [UI Screens](docs/03_UI_SCREENS.md)
+- [Business Rules](docs/04_BUSINESS_RULES.md)
+- [DB Schema](docs/09_DB_SCHEMA.md)
+- [Implementation Roadmap](docs/ROADMAP.md)
+- [Project Context](docs/PROJECT_CONTEXT.md)
