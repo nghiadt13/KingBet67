@@ -1,40 +1,72 @@
 // Deno Edge Function: sync-matches
-// Fetches matches + standings from football-data.org → upserts into DB → calculates odds
-// Runs via external cron (every 10 min) or admin "Sync Now" button
+// Fetches leagues + matches from football-data.org -> upserts DB -> calculates odds -> settles finished bets
+// Runs via external cron or admin "Sync Now" button
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 
-// ============================================================
-// ODDS CALCULATION (Phase 2)
-// ============================================================
-
 const HOME_ADV = 0.1;
 const MARGIN = 1.05;
-const DRAW_BASE = 0.26; // ~26% of PL matches end in draw
+const DRAW_BASE = 0.26;
+
+const COMPETITIONS_ENDPOINT = "https://api.football-data.org/v4/competitions";
+const CORE_LEAGUE_CODES = ["PL", "CL", "EL"];
+const API_THROTTLE_MS = 250;
+
+type LeagueRow = {
+  id: string;
+  code: string;
+  name: string;
+  country: string | null;
+  is_active: boolean;
+};
+
+type TeamRow = {
+  id: string;
+  external_id: number;
+  position: number | null;
+};
 
 function clampOdds(odds: number): number {
   return Math.round(Math.max(odds, 1.1) * 100) / 100;
 }
 
-// 1X2
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchJson(url: string, headers: Record<string, string>) {
+  const res = await fetch(url, { headers });
+  if (!res.ok) {
+    throw new Error(`API error ${res.status} at ${url}`);
+  }
+  return res.json();
+}
+
+function isVietnamCompetition(comp: any): boolean {
+  const name = `${comp?.name ?? ""} ${comp?.area?.name ?? ""}`.toLowerCase();
+  return name.includes("viet") || name.includes("vietnam");
+}
+
 function calcMatchResult(homePos: number, awayPos: number) {
   const homeStrength = (21 - homePos) / 20;
   const awayStrength = (21 - awayPos) / 20;
   const adjHome = homeStrength * (1 + HOME_ADV);
   const total = adjHome + awayStrength;
 
-  const homeProb = (adjHome / total) * (1 - DRAW_BASE);
-  const awayProb = (awayStrength / total) * (1 - DRAW_BASE);
+  const posDiff = Math.abs(homePos - awayPos);
+  const drawProb = DRAW_BASE + (1 - posDiff / 19) * 0.06 - 0.03;
+
+  const homeProb = (adjHome / total) * (1 - drawProb);
+  const awayProb = (awayStrength / total) * (1 - drawProb);
 
   return {
     home: clampOdds(MARGIN / homeProb),
-    draw: clampOdds(MARGIN / DRAW_BASE),
+    draw: clampOdds(MARGIN / drawProb),
     away: clampOdds(MARGIN / awayProb),
   };
 }
 
-// Over/Under 2.5
 function calcOverUnder(homePos: number, awayPos: number) {
   const avgStrength = ((21 - homePos) + (21 - awayPos)) / 40;
   const overProb = 0.45 + avgStrength * 0.15;
@@ -46,7 +78,6 @@ function calcOverUnder(homePos: number, awayPos: number) {
   };
 }
 
-// BTTS
 function calcBTTS(homePos: number, awayPos: number) {
   const posDiff = Math.abs(homePos - awayPos);
   const bttsProb = 0.52 - (posDiff / 20) * 0.15;
@@ -57,7 +88,6 @@ function calcBTTS(homePos: number, awayPos: number) {
   };
 }
 
-// Half Time 1X2
 function calcHalfTime(homePos: number, awayPos: number) {
   const matchResult = calcMatchResult(homePos, awayPos);
 
@@ -68,7 +98,6 @@ function calcHalfTime(homePos: number, awayPos: number) {
   };
 }
 
-// Correct Score (24 scores)
 const CORRECT_SCORES = [
   "0-0", "1-0", "0-1", "2-0", "0-2", "2-1", "1-2",
   "3-0", "0-3", "3-1", "1-3", "3-2", "2-3",
@@ -114,18 +143,12 @@ function calculateOdds(homePos: number, awayPos: number) {
   };
 }
 
-// ============================================================
-// MAIN EDGE FUNCTION
-// ============================================================
-
 Deno.serve(async (req: Request) => {
-  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    // 1. Init Supabase admin client (service_role bypasses RLS)
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -137,123 +160,249 @@ Deno.serve(async (req: Request) => {
     }
     const headers = { "X-Auth-Token": apiKey };
 
-    // 2. Fetch standings from football-data.org
-    const standingsRes = await fetch(
-      "https://api.football-data.org/v4/competitions/PL/standings",
-      { headers },
-    );
-    if (!standingsRes.ok) {
-      throw new Error(`Standings API error: ${standingsRes.status}`);
+    let competitions: any[] = [];
+    try {
+      const catalog = await fetchJson(COMPETITIONS_ENDPOINT, headers);
+      competitions = catalog?.competitions ?? [];
+    } catch (catalogErr) {
+      console.warn("[sync-matches] competitions discovery failed, fallback to DB-only leagues", catalogErr);
     }
-    const standingsData = await standingsRes.json();
 
-    // 3. Fetch matches from football-data.org
-    const matchesRes = await fetch(
-      "https://api.football-data.org/v4/competitions/PL/matches",
-      { headers },
+    const discoveredPreferred = competitions.filter((comp) =>
+      CORE_LEAGUE_CODES.includes(comp?.code) || isVietnamCompetition(comp)
     );
-    if (!matchesRes.ok) {
-      throw new Error(`Matches API error: ${matchesRes.status}`);
-    }
-    const matchesData = await matchesRes.json();
 
-    // 4. Upsert teams from standings
-    // deno-lint-ignore no-explicit-any
-    const table = standingsData.standings
-      ?.find((s: any) => s.type === "TOTAL")?.table ?? [];
-
-    // deno-lint-ignore no-explicit-any
-    const teamsToUpsert = table.map((entry: any) => ({
-      external_id: entry.team.id,
-      name: entry.team.name,
-      short_name: entry.team.shortName,
-      tla: entry.team.tla,
-      crest_url: entry.team.crest,
-      position: entry.position,
-      points: entry.points,
-      played_games: entry.playedGames,
-      won: entry.won,
-      draw: entry.draw,
-      lost: entry.lost,
-      goal_difference: entry.goalDifference,
+    const leaguesToUpsert = discoveredPreferred.map((comp) => ({
+      code: comp.code,
+      name: comp.name,
+      country: comp.area?.name ?? null,
+      emblem_url: comp.emblem ?? null,
+      is_active: true,
       updated_at: new Date().toISOString(),
     }));
 
-    const { error: teamsError } = await supabaseAdmin
-      .from("teams")
-      .upsert(teamsToUpsert, { onConflict: "external_id" });
-
-    if (teamsError) {
-      throw new Error(`Teams upsert failed: ${teamsError.message}`);
-    }
-
-    // 5. Build external_id → UUID lookup map
-    const { data: dbTeams, error: lookupError } = await supabaseAdmin
-      .from("teams")
-      .select("id, external_id, position");
-
-    if (lookupError) {
-      throw new Error(`Team lookup failed: ${lookupError.message}`);
-    }
-
-    const teamIdMap = new Map<number, string>();
-    const posMap = new Map<string, number>();
-    for (const t of dbTeams!) {
-      teamIdMap.set(t.external_id, t.id);
-      posMap.set(t.id, t.position ?? 10);
-    }
-
-    // 6. Upsert matches
-    // deno-lint-ignore no-explicit-any
-    const matchesToUpsert = matchesData.matches.map((m: any) => ({
-      external_id: m.id,
-      matchday: m.matchday,
-      utc_date: m.utcDate,
-      status: m.status,
-      home_team_id: teamIdMap.get(m.homeTeam.id),
-      away_team_id: teamIdMap.get(m.awayTeam.id),
-      home_score: m.score?.fullTime?.home ?? null,
-      away_score: m.score?.fullTime?.away ?? null,
-      half_time_home: m.score?.halfTime?.home ?? null,
-      half_time_away: m.score?.halfTime?.away ?? null,
+    // Ensure PL always exists and stays active as safe fallback
+    leaguesToUpsert.push({
+      code: "PL",
+      name: "Premier League",
+      country: "England",
+      emblem_url: null,
+      is_active: true,
       updated_at: new Date().toISOString(),
-    }));
+    });
 
-    // Filter out matches with missing team IDs
-    // deno-lint-ignore no-explicit-any
-    const validMatches = matchesToUpsert.filter(
-      (m: any) => m.home_team_id && m.away_team_id,
+    // Avoid duplicate codes (e.g. PL from discovery + fallback row)
+    const dedupedLeaguesToUpsert = Array.from(
+      new Map(leaguesToUpsert.map((row) => [row.code, row])).values(),
     );
 
-    const { error: matchesError } = await supabaseAdmin
-      .from("matches")
-      .upsert(validMatches, { onConflict: "external_id" });
+    const { error: leagueUpsertError } = await supabaseAdmin
+      .from("leagues")
+      .upsert(dedupedLeaguesToUpsert, { onConflict: "code" });
 
-    if (matchesError) {
-      throw new Error(`Matches upsert failed: ${matchesError.message}`);
+    if (leagueUpsertError) {
+      throw new Error(`Leagues upsert failed: ${leagueUpsertError.message}`);
     }
 
-    // 7. Calculate odds for TIMED/SCHEDULED matches (BR-E07)
-    const { data: scheduledMatches } = await supabaseAdmin
-      .from("matches")
-      .select("id, home_team_id, away_team_id")
-      .in("status", ["TIMED", "SCHEDULED"]);
+    const { data: activeLeagues, error: leagueLookupError } = await supabaseAdmin
+      .from("leagues")
+      .select("id, code, name, country, is_active")
+      .eq("is_active", true)
+      .order("code", { ascending: true });
 
+    if (leagueLookupError) {
+      throw new Error(`League lookup failed: ${leagueLookupError.message}`);
+    }
+
+    const leagues: LeagueRow[] = activeLeagues ?? [];
+    if (leagues.length === 0) {
+      throw new Error("No active leagues found after discovery/upsert");
+    }
+
+    let teamsUpdated = 0;
+    let matchesUpdated = 0;
     let oddsCalculated = 0;
-    for (const match of scheduledMatches ?? []) {
-      const homePos = posMap.get(match.home_team_id) ?? 10;
-      const awayPos = posMap.get(match.away_team_id) ?? 10;
-      const odds = calculateOdds(homePos, awayPos);
+    const leagueSummaries: Array<{ code: string; teams: number; matches: number; odds: number; warning?: string }> = [];
 
-      await supabaseAdmin
-        .from("matches")
-        .update({ odds })
-        .eq("id", match.id);
+    for (const league of leagues) {
+      let leagueTeamsUpdated = 0;
+      let leagueMatchesUpdated = 0;
+      let leagueOddsCalculated = 0;
 
-      oddsCalculated++;
+      try {
+        await sleep(API_THROTTLE_MS);
+        const standingsData = await fetchJson(
+          `https://api.football-data.org/v4/competitions/${league.code}/standings`,
+          headers,
+        );
+
+        await sleep(API_THROTTLE_MS);
+        const matchesData = await fetchJson(
+          `https://api.football-data.org/v4/competitions/${league.code}/matches`,
+          headers,
+        );
+
+        const standingsTable = standingsData?.standings
+          ?.find((s: any) => s.type === "TOTAL")?.table ?? [];
+
+        const positionByExternalTeamId = new Map<number, number>();
+        const teamPayloadByExternalId = new Map<number, any>();
+
+        for (const entry of standingsTable) {
+          positionByExternalTeamId.set(entry.team.id, entry.position ?? 10);
+          teamPayloadByExternalId.set(entry.team.id, {
+            external_id: entry.team.id,
+            name: entry.team.name,
+            short_name: entry.team.shortName ?? entry.team.name,
+            tla: entry.team.tla ?? "UNK",
+            crest_url: entry.team.crest ?? null,
+            position: entry.position ?? null,
+            points: entry.points ?? 0,
+            played_games: entry.playedGames ?? 0,
+            won: entry.won ?? 0,
+            draw: entry.draw ?? 0,
+            lost: entry.lost ?? 0,
+            goal_difference: entry.goalDifference ?? 0,
+            updated_at: new Date().toISOString(),
+          });
+        }
+
+        for (const m of matchesData?.matches ?? []) {
+          const home = m?.homeTeam;
+          const away = m?.awayTeam;
+          if (home?.id && !teamPayloadByExternalId.has(home.id)) {
+            teamPayloadByExternalId.set(home.id, {
+              external_id: home.id,
+              name: home.name,
+              short_name: home.shortName ?? home.name,
+              tla: home.tla ?? "UNK",
+              crest_url: home.crest ?? null,
+              position: null,
+              points: 0,
+              played_games: 0,
+              won: 0,
+              draw: 0,
+              lost: 0,
+              goal_difference: 0,
+              updated_at: new Date().toISOString(),
+            });
+          }
+          if (away?.id && !teamPayloadByExternalId.has(away.id)) {
+            teamPayloadByExternalId.set(away.id, {
+              external_id: away.id,
+              name: away.name,
+              short_name: away.shortName ?? away.name,
+              tla: away.tla ?? "UNK",
+              crest_url: away.crest ?? null,
+              position: null,
+              points: 0,
+              played_games: 0,
+              won: 0,
+              draw: 0,
+              lost: 0,
+              goal_difference: 0,
+              updated_at: new Date().toISOString(),
+            });
+          }
+        }
+
+        const teamsToUpsert = Array.from(teamPayloadByExternalId.values());
+        if (teamsToUpsert.length > 0) {
+          const { error: teamsError } = await supabaseAdmin
+            .from("teams")
+            .upsert(teamsToUpsert, { onConflict: "external_id" });
+
+          if (teamsError) {
+            throw new Error(`Teams upsert failed for ${league.code}: ${teamsError.message}`);
+          }
+          leagueTeamsUpdated = teamsToUpsert.length;
+          teamsUpdated += teamsToUpsert.length;
+        }
+
+        const { data: dbTeams, error: lookupError } = await supabaseAdmin
+          .from("teams")
+          .select("id, external_id, position");
+
+        if (lookupError) {
+          throw new Error(`Team lookup failed for ${league.code}: ${lookupError.message}`);
+        }
+
+        const teamIdMap = new Map<number, string>();
+        const fallbackPositionByTeamId = new Map<string, number>();
+        for (const t of (dbTeams ?? []) as TeamRow[]) {
+          teamIdMap.set(t.external_id, t.id);
+          fallbackPositionByTeamId.set(t.id, t.position ?? 10);
+        }
+
+        const matchesToUpsert = (matchesData?.matches ?? []).map((m: any) => {
+          const homeTeamId = teamIdMap.get(m.homeTeam.id);
+          const awayTeamId = teamIdMap.get(m.awayTeam.id);
+
+          const homePos = positionByExternalTeamId.get(m.homeTeam.id)
+            ?? (homeTeamId ? fallbackPositionByTeamId.get(homeTeamId) : undefined)
+            ?? 10;
+          const awayPos = positionByExternalTeamId.get(m.awayTeam.id)
+            ?? (awayTeamId ? fallbackPositionByTeamId.get(awayTeamId) : undefined)
+            ?? 10;
+
+          const isBettable = m.status === "TIMED" || m.status === "SCHEDULED";
+
+          return {
+            external_id: m.id,
+            league_id: league.id,
+            matchday: m.matchday ?? 0,
+            utc_date: m.utcDate,
+            status: m.status,
+            home_team_id: homeTeamId,
+            away_team_id: awayTeamId,
+            home_score: m.score?.fullTime?.home ?? null,
+            away_score: m.score?.fullTime?.away ?? null,
+            half_time_home: m.score?.halfTime?.home ?? null,
+            half_time_away: m.score?.halfTime?.away ?? null,
+            odds: isBettable ? calculateOdds(homePos, awayPos) : null,
+            updated_at: new Date().toISOString(),
+          };
+        });
+
+        const validMatches = matchesToUpsert.filter((m: any) => m.home_team_id && m.away_team_id);
+
+        if (validMatches.length > 0) {
+          const { error: matchesError } = await supabaseAdmin
+            .from("matches")
+            .upsert(validMatches, { onConflict: "external_id" });
+
+          if (matchesError) {
+            throw new Error(`Matches upsert failed for ${league.code}: ${matchesError.message}`);
+          }
+
+          leagueMatchesUpdated = validMatches.length;
+          matchesUpdated += validMatches.length;
+
+          leagueOddsCalculated = validMatches.filter(
+            (m: any) => m.status === "TIMED" || m.status === "SCHEDULED",
+          ).length;
+          oddsCalculated += leagueOddsCalculated;
+        }
+
+        leagueSummaries.push({
+          code: league.code,
+          teams: leagueTeamsUpdated,
+          matches: leagueMatchesUpdated,
+          odds: leagueOddsCalculated,
+        });
+      } catch (leagueErr) {
+        const errorMessage = leagueErr instanceof Error ? leagueErr.message : String(leagueErr);
+        console.error(`[sync-matches] league ${league.code} failed:`, errorMessage);
+        leagueSummaries.push({
+          code: league.code,
+          teams: leagueTeamsUpdated,
+          matches: leagueMatchesUpdated,
+          odds: leagueOddsCalculated,
+          warning: errorMessage,
+        });
+      }
     }
 
-    // 8. Auto-settle FINISHED and CANCELLED matches (BR-G03, BR-J03, BR-F04)
     const { data: unsettledMatches } = await supabaseAdmin
       .from("matches")
       .select("id")
@@ -279,10 +428,12 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // 9. Return summary
     const summary = {
-      teams_updated: teamsToUpsert.length,
-      matches_updated: validMatches.length,
+      leagues_active: leagues.length,
+      leagues_discovered: discoveredPreferred.length,
+      league_summaries: leagueSummaries,
+      teams_updated: teamsUpdated,
+      matches_updated: matchesUpdated,
       odds_calculated: oddsCalculated,
       matches_settled: matchesSettled,
       bets_settled: betsSettled,

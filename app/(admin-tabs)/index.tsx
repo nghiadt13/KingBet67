@@ -4,6 +4,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import { supabase } from '@/lib/supabase';
 import { AdminStats } from '@/types/database';
+import AdminHeader from '@/components/admin/AdminHeader';
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState<AdminStats | null>(null);
@@ -40,9 +41,7 @@ export default function AdminDashboard() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>📊 Admin Dashboard</Text>
-      </View>
+      <AdminHeader title="📊 Admin Dashboard" />
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.cardsGrid}>
           {cards.map((card) => (
@@ -86,8 +85,6 @@ export default function AdminDashboard() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.darkBg },
   loading: { flex: 1, backgroundColor: Colors.darkBg, justifyContent: 'center', alignItems: 'center' },
-  header: { paddingHorizontal: 16, paddingTop: 50, paddingBottom: 12 },
-  headerTitle: { color: Colors.white, fontSize: 22, fontWeight: '700' },
   scrollContent: { padding: 16, paddingBottom: 20 },
   cardsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   card: {

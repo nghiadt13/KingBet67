@@ -23,7 +23,7 @@ export type BetType =
   | 'btts'
   | 'half_time';
 
-export type BetStatus = 'PENDING' | 'WON' | 'LOST';
+export type BetStatus = 'PENDING' | 'WON' | 'LOST' | 'CANCELLED';
 
 // ---- Table Types ----
 
@@ -54,6 +54,17 @@ export interface Team {
   updated_at: string;
 }
 
+export interface League {
+  id: string;
+  code: string;
+  name: string;
+  country: string | null;
+  emblem_url: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface MatchOdds {
   match_result?: { home: number; draw: number; away: number };
   over_under?: { over: number; under: number };
@@ -65,6 +76,7 @@ export interface MatchOdds {
 export interface Match {
   id: string;
   external_id: number;
+  league_id: string | null;
   matchday: number;
   utc_date: string;
   status: MatchStatus;
@@ -98,6 +110,7 @@ export interface Bet {
 export interface MatchWithTeams extends Match {
   home_team: Team;
   away_team: Team;
+  league?: League | null;
 }
 
 export interface BetWithMatch extends Bet {
@@ -163,6 +176,11 @@ export interface Database {
         Row: Team;
         Insert: Partial<Team>;
         Update: Partial<Team>;
+      };
+      leagues: {
+        Row: League;
+        Insert: Partial<League>;
+        Update: Partial<League>;
       };
       matches: {
         Row: Match;

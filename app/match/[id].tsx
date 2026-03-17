@@ -215,11 +215,11 @@ export default function MatchDetailScreen() {
               <Text style={styles.teamName}>{match.home_team?.short_name || 'Home'}</Text>
             </View>
             <View style={styles.scoreCol}>
-              <Text style={styles.scoreDigits}>
-                <Text>{match.home_score ?? '-'}</Text>
-                <Text style={{ color: 'rgba(255,255,255,0.3)' }}> - </Text>
-                <Text>{match.away_score ?? '-'}</Text>
-              </Text>
+              <View style={styles.scoreRow}>
+                <Text style={styles.scoreDigits}>{match.home_score ?? '-'}</Text>
+                <Text style={styles.scoreSeparator}>-</Text>
+                <Text style={styles.scoreDigits}>{match.away_score ?? '-'}</Text>
+              </View>
               {/* Half-time score */}
               {(match.status === 'FINISHED' || match.status === 'IN_PLAY' || match.status === 'PAUSED') &&
                 match.half_time_home != null && match.half_time_away != null && (
@@ -518,7 +518,9 @@ const styles = StyleSheet.create({
   teamLogoPlaceholder: {},
   teamName: { color: Colors.white, fontSize: 14, fontWeight: '700' },
   scoreCol: { alignItems: 'center', flex: 1 },
-  scoreDigits: { color: Colors.white, fontSize: 40, fontWeight: '900', letterSpacing: 6 },
+  scoreRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center' },
+  scoreDigits: { color: Colors.white, fontSize: 40, fontWeight: '900' },
+  scoreSeparator: { color: 'rgba(255,255,255,0.3)', fontSize: 28, fontWeight: '400', marginHorizontal: 10 },
   // Odds
   oddsSection: { padding: 16, marginTop: 8 },
   oddsSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 },

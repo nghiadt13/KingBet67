@@ -6,6 +6,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Shadows } from '@/constants/colors';
 import { supabase } from '@/lib/supabase';
+import AdminHeader from '@/components/admin/AdminHeader';
 
 export default function AdminSystemScreen() {
   const [syncing, setSyncing] = useState(false);
@@ -19,7 +20,12 @@ export default function AdminSystemScreen() {
     try {
       const { data, error } = await supabase.functions.invoke('sync-matches');
       if (error) throw error;
-      setSyncResult(`✅ Sync thành công: ${JSON.stringify(data).slice(0, 100)}`);
+      const leagueLine = Array.isArray(data?.league_summaries)
+        ? `Leagues: ${data.league_summaries.length} | `
+        : '';
+      setSyncResult(
+        `✅ Sync thành công: ${leagueLine}Matches ${data?.matches_updated ?? 0}, Odds ${data?.odds_calculated ?? 0}, Settled ${data?.matches_settled ?? 0}`,
+      );
     } catch (err: any) {
       setSyncResult(`❌ Lỗi: ${err.message}`);
     } finally {
@@ -43,9 +49,7 @@ export default function AdminSystemScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>⚙️ System Controls</Text>
-      </View>
+      <AdminHeader title="⚙️ System Controls" />
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Sync */}
         <View style={styles.card}>
@@ -99,8 +103,6 @@ export default function AdminSystemScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.darkBg },
-  header: { paddingHorizontal: 16, paddingTop: 50, paddingBottom: 12 },
-  headerTitle: { color: Colors.white, fontSize: 22, fontWeight: '700' },
   scrollContent: { padding: 16, gap: 16, paddingBottom: 20 },
   card: {
     backgroundColor: Colors.surfaceDark, borderRadius: 14, padding: 18,

@@ -8,6 +8,7 @@ import { Colors } from '@/constants/colors';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { User } from '@/types/database';
+import AdminHeader from '@/components/admin/AdminHeader';
 
 export default function AdminUsersScreen() {
   const { user: currentUser } = useAuthStore();
@@ -73,9 +74,7 @@ export default function AdminUsersScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>👥 User Management</Text>
-      </View>
+      <AdminHeader title="👥 User Management" />
       <View style={styles.searchContainer}>
         <MaterialIcons name="search" size={20} color={Colors.textMuted} />
         <TextInput
@@ -105,8 +104,6 @@ export default function AdminUsersScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.darkBg },
-  header: { paddingHorizontal: 16, paddingTop: 50, paddingBottom: 12 },
-  headerTitle: { color: Colors.white, fontSize: 22, fontWeight: '700' },
   searchContainer: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     marginHorizontal: 16, backgroundColor: Colors.surfaceDark,

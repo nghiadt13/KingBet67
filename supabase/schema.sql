@@ -39,10 +39,23 @@ CREATE TABLE IF NOT EXISTS public.teams (
   updated_at       TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- leagues
+CREATE TABLE IF NOT EXISTS public.leagues (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code        VARCHAR(20) UNIQUE NOT NULL,
+  name        VARCHAR(120) NOT NULL,
+  country     VARCHAR(80),
+  emblem_url  TEXT,
+  is_active   BOOLEAN NOT NULL DEFAULT false,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- matches
 CREATE TABLE IF NOT EXISTS public.matches (
   id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   external_id     INTEGER     UNIQUE NOT NULL,
+  league_id       UUID        REFERENCES leagues(id),
   matchday        INTEGER     NOT NULL,
   utc_date        TIMESTAMPTZ NOT NULL,
   status          VARCHAR(20) NOT NULL DEFAULT 'TIMED'
@@ -58,6 +71,10 @@ CREATE TABLE IF NOT EXISTS public.matches (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Backfill-safe alter for existing DBs created before multi-league
+ALTER TABLE public.matches
+  ADD COLUMN IF NOT EXISTS league_id UUID REFERENCES public.leagues(id);
 
 -- bets (status allows CANCELLED for refunded bets)
 CREATE TABLE IF NOT EXISTS public.bets (
@@ -96,10 +113,20 @@ END $$;
 CREATE INDEX IF NOT EXISTS idx_matches_matchday ON matches(matchday);
 CREATE INDEX IF NOT EXISTS idx_matches_status ON matches(status);
 CREATE INDEX IF NOT EXISTS idx_matches_matchday_status ON matches(matchday, status);
+CREATE INDEX IF NOT EXISTS idx_matches_league_id ON matches(league_id);
+CREATE INDEX IF NOT EXISTS idx_matches_league_status_date ON matches(league_id, status, utc_date);
 CREATE INDEX IF NOT EXISTS idx_bets_user_id ON bets(user_id);
 CREATE INDEX IF NOT EXISTS idx_bets_user_created ON bets(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_bets_match_status ON bets(match_id, status);
 CREATE INDEX IF NOT EXISTS idx_teams_position ON teams(position);
+
+-- Seed baseline leagues (only PL enabled by default)
+INSERT INTO public.leagues (code, name, country, is_active)
+VALUES
+  ('PL', 'Premier League', 'England', true),
+  ('CL', 'UEFA Champions League', 'Europe', true),
+  ('EL', 'UEFA Europa League', 'Europe', true)
+ON CONFLICT (code) DO NOTHING;
 
 -- ==================
 -- 3. HELPER FUNCTIONS
@@ -486,6 +513,12 @@ ALTER TABLE public.teams ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Everyone can read teams" ON public.teams;
 CREATE POLICY "Everyone can read teams"
   ON public.teams FOR SELECT USING (true);
+
+-- LEAGUES (public read)
+ALTER TABLE public.leagues ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Everyone can read leagues" ON public.leagues;
+CREATE POLICY "Everyone can read leagues"
+  ON public.leagues FOR SELECT USING (true);
 
 -- MATCHES (public read)
 ALTER TABLE public.matches ENABLE ROW LEVEL SECURITY;
