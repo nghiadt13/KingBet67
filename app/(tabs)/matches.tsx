@@ -14,35 +14,11 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import { supabase } from '@/lib/supabase';
 import { MatchWithTeams, MatchStatus, League } from '@/types/database';
+import BetSlip from '@/components/ui/BetSlip';
 
 type FilterTab = 'live' | 'scheduled' | 'all';
 const ALL_LEAGUES_ID = '__all_leagues__';
-
-// Date filter helpers — use UTC-aware range to match DB timestamps
-function getDateRange(offset: number): { start: string; end: string; label: string } {
-  // Create date in local timezone for label
-  const local = new Date();
-  local.setHours(0, 0, 0, 0);
-  local.setDate(local.getDate() + offset);
-
-  let label: string;
-  if (offset === -1) label = 'Hôm qua';
-  else if (offset === 0) label = 'Hôm nay';
-  else if (offset === 1) label = 'Ngày mai';
-  else {
-    label = local.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
-  }
-
-  // Build start/end using local midnight boundaries → converts to UTC correctly
-  const startLocal = new Date(local);
-  startLocal.setHours(0, 0, 0, 0);
-  const endLocal = new Date(local);
-  endLocal.setHours(23, 59, 59, 999);
-
-  return { start: startLocal.toISOString(), end: endLocal.toISOString(), label };
-}
-
-const DATE_OFFSETS = [-1, 0, 1, 2, 3, 4, 5];
+const ACTIVE_STATUSES = ['IN_PLAY', 'PAUSED', 'TIMED', 'SCHEDULED'] as const;
 
 export default function MatchesScreen() {
   const router = useRouter();
@@ -50,16 +26,11 @@ export default function MatchesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
-  const [selectedDateOffset, setSelectedDateOffset] = useState(0); // 0 = today
   const [leagues, setLeagues] = useState<League[]>([]);
   const [selectedLeagueId, setSelectedLeagueId] = useState<string>(ALL_LEAGUES_ID);
   const [leagueFilterEnabled, setLeagueFilterEnabled] = useState(true);
   const [leaguesLoaded, setLeaguesLoaded] = useState(false);
 
-  const dateRange = useMemo(() => getDateRange(selectedDateOffset), [selectedDateOffset]);
-  const dateChips = useMemo(() => DATE_OFFSETS.map(o => ({ offset: o, ...getDateRange(o) })), []);
-
-  // fetchLeagues: no dependencies — runs once on mount, does NOT reset date/filter state
   const fetchLeagues = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -71,8 +42,21 @@ export default function MatchesScreen() {
       if (error) throw error;
 
       const leagueData = (data as League[]) || [];
-      setLeagues(leagueData);
-      setLeagueFilterEnabled(leagueData.length > 0);
+
+      // Only show leagues that actually have matches in the DB
+      const leaguesWithMatches: League[] = [];
+      for (const league of leagueData) {
+        const { count } = await supabase
+          .from('matches')
+          .select('*', { count: 'exact', head: true })
+          .eq('league_id', league.id);
+        if (count && count > 0) {
+          leaguesWithMatches.push(league);
+        }
+      }
+
+      setLeagues(leaguesWithMatches);
+      setLeagueFilterEnabled(leaguesWithMatches.length > 0);
       setLeaguesLoaded(true);
     } catch {
       setLeagues([]);
@@ -82,7 +66,7 @@ export default function MatchesScreen() {
     }
   }, []);
 
-  const fetchMatches = useCallback(async (leagueId: string, range: { start: string; end: string }) => {
+  const fetchMatches = useCallback(async (leagueId: string) => {
     let query = supabase
       .from('matches')
       .select(`
@@ -91,9 +75,9 @@ export default function MatchesScreen() {
         away_team:teams!matches_away_team_id_fkey(*),
         league:leagues(*)
       `)
-      .gte('utc_date', range.start)
-      .lte('utc_date', range.end)
-      .order('utc_date', { ascending: true });
+      .in('status', [...ACTIVE_STATUSES])
+      .order('utc_date', { ascending: true })
+      .limit(50);
 
     if (leagueFilterEnabled && leagueId !== ALL_LEAGUES_ID) {
       query = query.eq('league_id', leagueId);
@@ -118,13 +102,13 @@ export default function MatchesScreen() {
     init();
   }, [fetchLeagues]);
 
-  // Fetch matches whenever league, date, or leagueFilter changes
+  // Fetch matches whenever league or leagueFilter changes
   useEffect(() => {
-    if (!leaguesLoaded) return; // wait for leagues to load first
+    if (!leaguesLoaded) return;
     const run = async () => {
       try {
         setLoading(true);
-        await fetchMatches(selectedLeagueId, dateRange);
+        await fetchMatches(selectedLeagueId);
       } catch (err) {
         console.error('Error fetching matches:', err);
       } finally {
@@ -132,29 +116,28 @@ export default function MatchesScreen() {
       }
     };
     run();
-  }, [selectedLeagueId, dateRange, fetchMatches, leagueFilterEnabled, leaguesLoaded]);
+  }, [selectedLeagueId, fetchMatches, leagueFilterEnabled, leaguesLoaded]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
       await Promise.all([
         fetchLeagues(),
-        fetchMatches(selectedLeagueId, dateRange),
+        fetchMatches(selectedLeagueId),
       ]);
     } catch (err) {
       console.error('Refresh failed:', err);
     } finally {
       setRefreshing(false);
     }
-  }, [fetchLeagues, fetchMatches, selectedLeagueId, dateRange]);
+  }, [fetchLeagues, fetchMatches, selectedLeagueId]);
 
   const isLive = (status: MatchStatus) => status === 'IN_PLAY' || status === 'PAUSED';
   const isScheduled = (status: MatchStatus) => status === 'TIMED' || status === 'SCHEDULED';
-  const isFinished = (status: MatchStatus) => status === 'FINISHED';
 
   const sortedMatches = useMemo(() => {
     const statusPriority: Record<string, number> = {
-      IN_PLAY: 0, PAUSED: 1, TIMED: 2, SCHEDULED: 3, FINISHED: 4, POSTPONED: 5, CANCELLED: 6,
+      IN_PLAY: 0, PAUSED: 1, TIMED: 2, SCHEDULED: 3,
     };
     return [...matches].sort((a, b) => {
       const pa = statusPriority[a.status] ?? 99;
@@ -181,12 +164,6 @@ export default function MatchesScreen() {
       case 'IN_PLAY':
       case 'PAUSED':
         return { text: 'Trực tiếp', color: Colors.liveRed, bg: 'rgba(239,68,68,0.15)' };
-      case 'FINISHED':
-        return { text: 'Kết thúc', color: Colors.textMuted, bg: 'rgba(100,116,139,0.15)' };
-      case 'POSTPONED':
-        return { text: 'Hoãn', color: Colors.pendingYellow, bg: Colors.pendingYellowBg };
-      case 'CANCELLED':
-        return { text: 'Hủy', color: Colors.textMuted, bg: 'rgba(100,116,139,0.15)' };
       case 'TIMED':
       case 'SCHEDULED':
         return { text: 'Sắp đá', color: Colors.neonGreen, bg: Colors.neonGreenBg };
@@ -208,7 +185,6 @@ export default function MatchesScreen() {
   const renderMatchCard = (match: MatchWithTeams) => {
     const badge = getStatusBadge(match.status);
     const live = isLive(match.status);
-    const finished = isFinished(match.status);
     const scheduled = isScheduled(match.status);
 
     return (
@@ -249,8 +225,8 @@ export default function MatchesScreen() {
           </View>
 
           <View style={styles.matchScoreCol}>
-            {finished || live ? (
-              <Text style={[styles.matchScore, live && { color: Colors.liveRed }]}> 
+            {live ? (
+              <Text style={[styles.matchScore, { color: Colors.liveRed }]}> 
                 {match.home_score ?? 0} - {match.away_score ?? 0}
               </Text>
             ) : (
@@ -318,30 +294,13 @@ export default function MatchesScreen() {
                 onPress={() => setSelectedLeagueId(league.id)}
               >
                 <Text style={[styles.leagueTextChip, selectedLeagueId === league.id && styles.leagueTextChipActive]}>
-                  {league.code}
+                  {league.name}
                 </Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
         </View>
       )}
-
-      {/* Date filter replacing matchday */}
-      <View style={styles.dateContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateScroll}>
-          {dateChips.map((chip) => (
-            <TouchableOpacity
-              key={chip.offset}
-              style={[styles.dateChip, selectedDateOffset === chip.offset && styles.dateChipActive]}
-              onPress={() => setSelectedDateOffset(chip.offset)}
-            >
-              <Text style={[styles.dateChipText, selectedDateOffset === chip.offset && styles.dateChipTextActive]}>
-                {chip.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
 
       <View style={styles.filterContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
@@ -371,11 +330,14 @@ export default function MatchesScreen() {
           <View style={styles.emptyState}>
             <MaterialIcons name="sports-soccer" size={48} color={Colors.textMuted} />
             <Text style={styles.emptyText}>Không có trận đấu</Text>
-            <Text style={styles.emptySubText}>Thử chọn ngày khác hoặc giải khác</Text>
+            <Text style={styles.emptySubText}>Thử chọn giải khác hoặc kéo xuống để làm mới</Text>
           </View>
         )}
         {filteredMatches.map(renderMatchCard)}
       </ScrollView>
+
+      {/* Parlay Floating Bet Slip */}
+      <BetSlip />
     </View>
   );
 }
@@ -396,18 +358,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(30,41,59,0.5)', borderWidth: 1, borderColor: 'rgba(100,116,139,0.15)', marginRight: 6,
   },
   leagueChipActive: { backgroundColor: Colors.neonGreenBg, borderColor: Colors.neonGreenBorder },
-  leagueTextChip: { color: Colors.textMuted, fontSize: 12, fontWeight: '700' },
+  leagueTextChip: { color: Colors.textMuted, fontSize: 11, fontWeight: '600' },
   leagueTextChipActive: { color: Colors.neonGreen },
-  // Date filter chips
-  dateContainer: { borderBottomWidth: 0.5, borderBottomColor: 'rgba(100,116,139,0.2)' },
-  dateScroll: { paddingHorizontal: 12, paddingVertical: 10, gap: 6 },
-  dateChip: {
-    paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20,
-    backgroundColor: 'rgba(30,41,59,0.5)', borderWidth: 1, borderColor: 'rgba(100,116,139,0.15)', marginRight: 6,
-  },
-  dateChipActive: { backgroundColor: Colors.neonGreenBg, borderColor: Colors.neonGreenBorder },
-  dateChipText: { color: Colors.textMuted, fontSize: 12, fontWeight: '600' },
-  dateChipTextActive: { color: Colors.neonGreen },
   // Status filter
   filterContainer: { borderBottomWidth: 0.5, borderBottomColor: 'rgba(100,116,139,0.1)' },
   filterScroll: { paddingHorizontal: 12, paddingVertical: 8, gap: 6 },

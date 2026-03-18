@@ -15,15 +15,42 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase';
-import { UserStats } from '@/types/database';
+import {
+  DEPOSIT_REQUEST_DEPLOY_MESSAGE,
+  isDepositRequestFeatureUnavailable,
+} from '@/lib/depositRequestFeature';
+import { DepositRequest, UserStats } from '@/types/database';
+
+const REQUEST_STATUS_META = {
+  PENDING: {
+    label: 'Dang cho',
+    icon: 'schedule' as const,
+    textColor: Colors.pendingYellow,
+    backgroundColor: Colors.pendingYellowBg,
+  },
+  APPROVED: {
+    label: 'Da duyet',
+    icon: 'check-circle' as const,
+    textColor: Colors.successGreen,
+    backgroundColor: 'rgba(34,197,94,0.16)',
+  },
+  REJECTED: {
+    label: 'Tu choi',
+    icon: 'cancel' as const,
+    textColor: Colors.errorRed,
+    backgroundColor: Colors.errorRedBg,
+  },
+} as const;
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, session, signOut, fetchUserProfile } = useAuthStore();
   const [stats, setStats] = useState<UserStats | null>(null);
+  const [depositRequests, setDepositRequests] = useState<DepositRequest[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [depositAmount, setDepositAmount] = useState('');
   const [depositing, setDepositing] = useState(false);
+  const [depositFeatureUnavailable, setDepositFeatureUnavailable] = useState(false);
 
   const QUICK_AMOUNTS = [50000, 100000, 200000, 500000, 1000000];
   const MAX_BALANCE = 50000000; // 50 triệu
@@ -43,17 +70,42 @@ export default function ProfileScreen() {
     }
   }, [isGuest]);
 
+  const fetchDepositRequests = useCallback(async () => {
+    if (isGuest || !user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('deposit_requests')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (error) throw error;
+      setDepositFeatureUnavailable(false);
+      setDepositRequests((data || []) as DepositRequest[]);
+    } catch (err) {
+      if (isDepositRequestFeatureUnavailable(err)) {
+        setDepositFeatureUnavailable(true);
+        setDepositRequests([]);
+        return;
+      }
+      console.error('Error fetching deposit requests:', err);
+    }
+  }, [isGuest, user]);
+
   useEffect(() => {
     fetchStats();
-  }, []);
+    fetchDepositRequests();
+  }, [fetchStats, fetchDepositRequests]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     if (!isGuest) {
-      await Promise.all([fetchStats(), fetchUserProfile()]);
+      await Promise.all([fetchStats(), fetchUserProfile(), fetchDepositRequests()]);
     }
     setRefreshing(false);
-  }, [isGuest]);
+  }, [fetchDepositRequests, fetchStats, fetchUserProfile, isGuest]);
 
   const handleDepositAmountChange = (text: string) => {
     // Only allow digits
@@ -71,6 +123,11 @@ export default function ProfileScreen() {
   };
 
   const handleDeposit = async () => {
+    if (depositFeatureUnavailable) {
+      Alert.alert('Chưa deploy backend', DEPOSIT_REQUEST_DEPLOY_MESSAGE);
+      return;
+    }
+
     const amount = parseInt(depositAmount);
     if (!amount || amount <= 0) {
       Alert.alert('Lỗi', 'Vui lòng nhập số tiền hợp lệ');
@@ -91,11 +148,11 @@ export default function ProfileScreen() {
 
     // Confirmation dialog
     Alert.alert(
-      'Xác nhận nạp điểm',
-      `Bạn muốn nạp ${formatBalance(amount)}đ vào tài khoản?\n\nSố dư sau nạp: ${formatBalance((user?.balance ?? 0) + amount)}đ`,
+      'Xác nhận gửi yêu cầu',
+      `Gửi yêu cầu nạp ${formatBalance(amount)}đ?\n\nAdmin sẽ duyệt trước khi cộng số dư.`,
       [
         { text: 'Hủy', style: 'cancel' },
-        { text: 'Nạp ngay', style: 'default', onPress: () => executeDeposit(amount) },
+        { text: 'Gửi yêu cầu', style: 'default', onPress: () => executeDeposit(amount) },
       ]
     );
   };
@@ -103,14 +160,28 @@ export default function ProfileScreen() {
   const executeDeposit = async (amount: number) => {
     setDepositing(true);
     try {
-      const { error } = await supabase.rpc('deposit', { p_amount: amount });
+      const { error } = await supabase.rpc('create_deposit_request', { p_amount: amount });
       if (error) throw error;
+      setDepositFeatureUnavailable(false);
       setDepositAmount('');
-      await Promise.all([fetchUserProfile(), fetchStats()]);
-      Alert.alert('🎉 Thành công!', `Đã nạp ${formatBalance(amount)}đ vào tài khoản.\nSố dư hiện tại: ${formatBalance((user?.balance ?? 0) + amount)}đ`);
+      await fetchDepositRequests();
+      Alert.alert('Đã gửi yêu cầu', `Yêu cầu nạp ${formatBalance(amount)}đ đã được gửi. Số dư sẽ chỉ tăng sau khi admin duyệt.`);
     } catch (err: any) {
+      if (isDepositRequestFeatureUnavailable(err)) {
+        setDepositFeatureUnavailable(true);
+        Alert.alert('Chưa deploy backend', DEPOSIT_REQUEST_DEPLOY_MESSAGE);
+        return;
+      }
+
       const msg = err.message || 'Nạp tiền thất bại';
-      Alert.alert('Lỗi', msg.includes('INVALID_AMOUNT') ? 'Số tiền không hợp lệ' : msg);
+      Alert.alert(
+        'Lỗi',
+        msg.includes('INVALID_AMOUNT')
+          ? 'Số tiền không hợp lệ'
+          : msg.includes('USER_BANNED')
+            ? 'Tài khoản đã bị khóa'
+            : 'Không thể tạo yêu cầu nạp tiền'
+      );
     } finally {
       setDepositing(false);
     }
@@ -125,6 +196,16 @@ export default function ProfileScreen() {
 
   const formatBalance = (balance: number) =>
     new Intl.NumberFormat('vi-VN').format(balance);
+
+  const formatRequestTime = (value: string) =>
+    new Date(value).toLocaleString('vi-VN', {
+      hour12: false,
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
 
   // --- Guest Mode ---
   if (isGuest) {
@@ -227,7 +308,7 @@ export default function ProfileScreen() {
 
           {/* Deposit Section */}
           <View style={styles.depositSection}>
-            <Text style={styles.depositSectionTitle}>Nạp điểm</Text>
+            <Text style={styles.depositSectionTitle}>Yeu cau nap diem</Text>
 
             {/* Quick Amount Chips */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false}
@@ -269,7 +350,11 @@ export default function ProfileScreen() {
                 ) : null}
               </View>
               <TouchableOpacity
-                style={[styles.depositButton, depositing && { opacity: 0.6 }]}
+                style={[
+                  styles.depositButton,
+                  depositing && { opacity: 0.6 },
+                  depositFeatureUnavailable && styles.depositButtonDisabled,
+                ]}
                 onPress={handleDeposit}
                 disabled={depositing || !depositAmount}
               >
@@ -277,12 +362,22 @@ export default function ProfileScreen() {
                   <ActivityIndicator color={Colors.black} size="small" />
                 ) : (
                   <>
-                    <MaterialIcons name="add-circle" size={18} color={Colors.black} />
-                    <Text style={styles.depositButtonText}>Nạp</Text>
+                    <MaterialIcons name="send" size={18} color={Colors.black} />
+                    <Text style={styles.depositButtonText}>Gửi yêu cầu</Text>
                   </>
                 )}
               </TouchableOpacity>
             </View>
+
+            <Text style={styles.depositHelperText}>
+              Yêu cầu sẽ được admin duyệt trước khi cộng số dư.
+            </Text>
+
+            {depositFeatureUnavailable ? (
+              <Text style={styles.depositUnavailableText}>
+                Tạm thời chưa khả dụng trên server hiện tại.
+              </Text>
+            ) : null}
 
             {/* Limits Info */}
             <View style={styles.depositLimitsRow}>
@@ -298,6 +393,55 @@ export default function ProfileScreen() {
             </View>
           </View>
         </View>
+
+        {!depositFeatureUnavailable ? (
+          <View style={styles.requestSection}>
+            <View style={styles.requestSectionHeader}>
+              <Text style={styles.requestSectionTitle}>Yêu cầu gần đây</Text>
+              <Text style={styles.requestSectionSubtitle}>Lịch sử yêu cầu nạp tiền của bạn</Text>
+            </View>
+
+            {depositRequests.length === 0 ? (
+              <View style={styles.requestEmptyState}>
+                <MaterialIcons name="receipt-long" size={22} color={Colors.textMuted} />
+                <Text style={styles.requestEmptyText}>Chưa có yêu cầu nạp tiền nào</Text>
+              </View>
+            ) : (
+              depositRequests.map((request) => {
+                const statusMeta = REQUEST_STATUS_META[request.status];
+
+                return (
+                  <View key={request.id} style={styles.requestCard}>
+                    <View style={styles.requestCardTop}>
+                      <View>
+                        <Text style={styles.requestAmount}>{formatBalance(request.amount)}đ</Text>
+                        <Text style={styles.requestDate}>Tạo lúc {formatRequestTime(request.created_at)}</Text>
+                      </View>
+                      <View style={[styles.requestBadge, { backgroundColor: statusMeta.backgroundColor }]}>
+                        <MaterialIcons name={statusMeta.icon} size={14} color={statusMeta.textColor} />
+                        <Text style={[styles.requestBadgeText, { color: statusMeta.textColor }]}>
+                          {statusMeta.label}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {request.reviewed_at ? (
+                      <Text style={styles.requestMeta}>
+                        Xử lý lúc {formatRequestTime(request.reviewed_at)}
+                      </Text>
+                    ) : null}
+
+                    {request.admin_note ? (
+                      <Text style={styles.requestMeta}>
+                        Ghi chú admin: {request.admin_note}
+                      </Text>
+                    ) : null}
+                  </View>
+                );
+              })
+            )}
+          </View>
+        ) : null}
 
         {/* Stats Grid */}
         <View style={styles.statsGrid}>
@@ -384,16 +528,6 @@ export default function ProfileScreen() {
             <View style={styles.menuItemLeft}>
               <MaterialIcons name="leaderboard" size={22} color={Colors.textSecondary} />
               <Text style={styles.menuItemText}>Bảng xếp hạng</Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={22} color={Colors.textMuted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.menuItem}
-            onPress={() => Alert.alert('Lịch sử giao dịch', 'Tính năng đang phát triển')}
-          >
-            <View style={styles.menuItemLeft}>
-              <MaterialIcons name="history" size={22} color={Colors.textSecondary} />
-              <Text style={styles.menuItemText}>Lịch sử giao dịch</Text>
             </View>
             <MaterialIcons name="chevron-right" size={22} color={Colors.textMuted} />
           </TouchableOpacity>
@@ -522,14 +656,79 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 6,
     backgroundColor: Colors.neonGreen, paddingHorizontal: 18, paddingVertical: 12, borderRadius: 10,
   },
+  depositButtonDisabled: {
+    backgroundColor: 'rgba(173, 255, 47, 0.45)',
+  },
   depositButtonText: { color: Colors.black, fontSize: 14, fontWeight: '700' },
   depositLimitsRow: {
     flexDirection: 'row', justifyContent: 'space-between', marginTop: 10,
     paddingHorizontal: 4,
   },
+  depositHelperText: {
+    color: Colors.textMuted,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 10,
+  },
+  depositUnavailableText: {
+    marginTop: 4,
+    color: Colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 18,
+  },
   depositLimitText: {
     color: Colors.textMuted, fontSize: 10, fontWeight: '500',
   },
+  requestSection: {
+    marginTop: 20,
+    marginHorizontal: 16,
+    backgroundColor: 'rgba(30,41,59,0.35)',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 16,
+    padding: 16,
+    gap: 12,
+  },
+  requestSectionHeader: { gap: 4 },
+  requestSectionTitle: { color: Colors.white, fontSize: 16, fontWeight: '700' },
+  requestSectionSubtitle: { color: Colors.textMuted, fontSize: 12 },
+  requestEmptyState: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderStyle: 'dashed',
+    paddingVertical: 18,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    gap: 8,
+  },
+  requestEmptyText: { color: Colors.textMuted, fontSize: 13 },
+  requestCard: {
+    borderRadius: 12,
+    backgroundColor: Colors.surfaceDark,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 14,
+    gap: 6,
+  },
+  requestCardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  requestAmount: { color: Colors.white, fontSize: 17, fontWeight: '800' },
+  requestDate: { color: Colors.textMuted, fontSize: 12, marginTop: 2 },
+  requestBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  requestBadgeText: { fontSize: 11, fontWeight: '700' },
+  requestMeta: { color: Colors.textSecondary, fontSize: 12, lineHeight: 18 },
   // Stats
   statsGrid: { flexDirection: 'row', paddingHorizontal: 16, gap: 12, marginTop: 20 },
   statCard: {

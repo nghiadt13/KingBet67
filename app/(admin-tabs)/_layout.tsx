@@ -36,8 +36,9 @@ export default function AdminTabsLayout() {
         tabBarLabelStyle: { fontSize: 10, fontWeight: '600' },
       }}
     >
+      <Tabs.Screen name="index" options={{ href: null }} />
       <Tabs.Screen
-        name="index"
+        name="dashboard"
         options={{
           title: 'Dashboard',
           tabBarIcon: ({ color, size }) => <MaterialIcons name="dashboard" size={size} color={color} />,
@@ -48,6 +49,13 @@ export default function AdminTabsLayout() {
         options={{
           title: 'Users',
           tabBarIcon: ({ color, size }) => <MaterialIcons name="people" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="requests"
+        options={{
+          title: 'Nạp tiền',
+          tabBarIcon: ({ color, size }) => <MaterialIcons name="account-balance-wallet" size={size} color={color} />,
         }}
       />
       <Tabs.Screen

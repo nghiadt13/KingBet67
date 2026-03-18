@@ -1,179 +1,139 @@
-# Phase 3: Deposit (S-09 Profile)
+# Phase 3: Deposit Request (S-09 Profile)
 
 ## Context
 
-- [Wireframe S-09](file:///d:/works/vsc_test/docs/03_wireframe/S-09_profile.md)
-- [API Contract: deposit](file:///d:/works/vsc_test/docs/08_API_CONTRACT.md#L207-L221)
-- [Business Rules: Balance](file:///d:/works/vsc_test/docs/04_BUSINESS_RULES.md#L22-L30)
-- [Existing profile.tsx](file:///d:/works/vsc_test/app/(user-tabs)/profile.tsx)
+- [Current profile screen](D:\Education\MMA301\KingBet67\app\(tabs)\profile.tsx)
+- [Current admin tabs](D:\Education\MMA301\KingBet67\app\(admin-tabs))
+- [Business Rules](D:\Education\MMA301\KingBet67\docs\04_BUSINESS_RULES.md)
 
 ## Overview
 
 - **Priority:** P1
-- **Status:** Pending
-- **Effort:** ~1h
+- **Status:** Completed
+- **Effort:** ~2-3h for user flow, admin approval handled in Phase 8
 
-Thêm section "Nạp tiền" vào Profile screen. Input + button → gọi RPC `deposit` → update balance.
+This plan replaces the older assumption `user nhập tiền -> gọi RPC deposit -> balance tăng ngay`.
 
-## UI Structure
+New requirement:
+- user tạo yêu cầu nạp tiền
+- request chờ admin duyệt
+- chỉ khi admin approve thì balance mới tăng
 
-Thêm vào giữa info cards và logout button:
+## Product Definition
 
-```
-│  ... (existing info cards) ...    │
-│                                   │
-│  ── Nạp tiền ──────────────────  │
-│  ┌──────────────────────────┐   │
-│  │ 💰      500,000          │   │  ← Input (numeric)
-│  └──────────────────────────┘   │
-│  ┌──────────────────────────┐   │
-│  │          NẠP TIỀN         │   │  ← Primary button
-│  └──────────────────────────┘   │
-│                                   │
-│  ⚠ Error message                │  ← Conditional
-│  ✅ Nạp thành công! Số dư: xxx  │  ← Conditional
-│                                   │
-│  ... (existing logout button) ... │
-```
+Profile should no longer present deposit as an instant balance mutation.
 
-## Files
+Instead, the flow is:
 
-### [MODIFY] `app/(user-tabs)/profile.tsx`
+1. User nhập số tiền muốn nạp
+2. User bấm `Gửi yêu cầu`
+3. App tạo `deposit_request`
+4. Request có trạng thái `PENDING`
+5. Admin duyệt hoặc từ chối
+6. Nếu admin duyệt thì balance mới được cộng
 
-**Add deposit section:**
+## Backend Design
 
-1. **State:**
-```typescript
-const [depositAmount, setDepositAmount] = useState("");
-const [isDepositing, setIsDepositing] = useState(false);
-const [depositError, setDepositError] = useState<string | null>(null);
-const [depositSuccess, setDepositSuccess] = useState<string | null>(null);
-```
+### New table
 
-2. **Handler:**
-```typescript
-const handleDeposit = async () => {
-  const amount = parseInt(depositAmount.replace(/\D/g, ""), 10);
-
-  // Validate (BR-B02)
-  if (!amount || amount <= 0) {
-    setDepositError("Số tiền phải lớn hơn 0");
-    return;
-  }
-
-  setIsDepositing(true);
-  setDepositError(null);
-  setDepositSuccess(null);
-
-  const { data, error } = await supabase.rpc("deposit", { p_amount: amount });
-
-  if (error) {
-    setDepositError(
-      error.message.includes("INVALID_AMOUNT")
-        ? "Số tiền không hợp lệ"
-        : "Đã xảy ra lỗi, thử lại"
-    );
-    setIsDepositing(false);
-    return;
-  }
-
-  // Update local balance
-  refreshBalance();
-  setDepositSuccess(
-    `Nạp thành công! Số dư: ${data.new_balance.toLocaleString()} coins`
-  );
-  setDepositAmount("");
-  setIsDepositing(false);
-};
+```sql
+deposit_requests (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+  amount bigint not null,
+  status text not null default 'PENDING', -- PENDING | APPROVED | REJECTED
+  reviewed_by uuid null references public.users(id),
+  reviewed_at timestamptz null,
+  admin_note text null,
+  created_at timestamptz not null default now()
+)
 ```
 
-3. **UI section** (insert before logout button):
-```tsx
-{/* Deposit Section */}
-<View style={styles.depositSection}>
-  <Text style={styles.sectionTitle}>Nạp tiền</Text>
-  <View style={styles.inputRow}>
-    <MaterialCommunityIcons name="wallet-plus-outline" size={20} color="#9BA1A6" />
-    <TextInput
-      style={styles.depositInput}
-      placeholder="Nhập số tiền"
-      keyboardType="numeric"
-      value={depositAmount}
-      onChangeText={setDepositAmount}
-    />
-  </View>
-  <TouchableOpacity
-    style={[styles.depositButton, isDepositing && { opacity: 0.6 }]}
-    onPress={handleDeposit}
-    disabled={isDepositing}
-  >
-    {isDepositing ? (
-      <ActivityIndicator color="#fff" />
-    ) : (
-      <Text style={styles.depositButtonText}>Nạp tiền</Text>
-    )}
-  </TouchableOpacity>
+### Required RPCs
 
-  {depositError && (
-    <View style={styles.errorBox}>
-      <MaterialCommunityIcons name="alert-circle-outline" size={16} color="#DC2626" />
-      <Text style={styles.errorText}>{depositError}</Text>
-    </View>
-  )}
-  {depositSuccess && (
-    <View style={styles.successBox}>
-      <MaterialCommunityIcons name="check-circle-outline" size={16} color="#16A34A" />
-      <Text style={styles.successText}>{depositSuccess}</Text>
-    </View>
-  )}
-</View>
+1. `create_deposit_request(p_amount bigint)`
+   - auth required
+   - validate amount > 0
+   - insert new pending row
+   - return request info
+
+2. `approve_deposit_request(p_request_id uuid, p_admin_note text default null)`
+   - admin only
+   - lock pending row
+   - increase user balance
+   - mark request `APPROVED`
+   - set `reviewed_by`, `reviewed_at`, `admin_note`
+   - atomic transaction
+
+3. `reject_deposit_request(p_request_id uuid, p_admin_note text default null)`
+   - admin only
+   - mark request `REJECTED`
+   - no balance mutation
+
+### RLS
+
+- user can create and read own requests
+- admin can read all requests
+- admin should approve or reject through RPCs, not direct client writes
+
+## User UI Scope
+
+### Profile deposit section
+
+Keep the current amount entry idea, but replace:
+- button text `Nạp`
+- direct success preview
+
+With:
+- button text `Gửi yêu cầu`
+- helper text: `Yêu cầu sẽ được admin duyệt trước khi cộng số dư`
+
+### Transaction/history meaning
+
+For this requirement, `Lịch sử giao dịch` can be simplified to:
+- list of deposit requests
+- amount
+- status badge: `Đang chờ`, `Đã duyệt`, `Từ chối`
+- created time
+- reviewed time if available
+- admin note if rejected
+
+This is simpler than a full wallet ledger and matches the workflow you described.
+
+## Frontend Changes
+
+### [MODIFY] `app/(tabs)/profile.tsx`
+
+Replace direct deposit flow:
+- remove `supabase.rpc('deposit', ...)`
+- submit `create_deposit_request`
+- show success copy `Đã gửi yêu cầu nạp`
+- fetch recent deposit requests for display
+
+### Recommended section layout
+
+```text
+Số tiền muốn nạp
+[ quick amounts ]
+[ amount input ] [ Gửi yêu cầu ]
+Yêu cầu sẽ được admin duyệt trước khi cộng số dư.
+
+Yêu cầu gần đây
+- 200.000đ  | Đang chờ
+- 500.000đ  | Đã duyệt
+- 100.000đ  | Từ chối
 ```
-
-4. **New styles:**
-- `depositSection`: `marginBottom: 24`
-- `sectionTitle`: 13px, uppercase, `#94A3B8`, letterSpacing 0.5, marginBottom 10
-- `inputRow`: same as auth input pattern (52px, radius 14, `#F8FAFC` bg, border `#E2E8F0`)
-- `depositButton`: Primary Button pattern (`#3B82F6`, 48px)
-- `errorBox`: Error Box pattern
-- `successBox`: similar to error but `#F0FDF4` bg, `#16A34A` text
-
-### [MODIFY] `stores/authStore.ts`
-
-Add `refreshBalance` action (if not already added in Phase 2):
-
-```typescript
-refreshBalance: async () => {
-  const userId = get().user?.id;
-  if (!userId) return;
-  const { data } = await supabase
-    .from("users")
-    .select("balance")
-    .eq("id", userId)
-    .single();
-  if (data) {
-    set((s) => ({
-      user: s.user ? { ...s.user, balance: data.balance } : null,
-    }));
-  }
-},
-```
-
-## Todo List
-
-- [ ] Add deposit UI section to `profile.tsx`
-- [ ] Deposit input (numeric, thousand separator display)
-- [ ] Deposit button (Primary Button pattern)
-- [ ] Call RPC `deposit` on submit
-- [ ] Error handling (INVALID_AMOUNT → Vietnamese)
-- [ ] Success message with new balance
-- [ ] Refresh balance in authStore after deposit
-- [ ] Loading state (ActivityIndicator)
-- [ ] Clear input after success
 
 ## Success Criteria
 
-- Input amount → press "Nạp tiền" → balance increases in DB
-- Profile's balance card updates after deposit
-- Error: amount <= 0 → "Số tiền phải lớn hơn 0"
-- Loading spinner while depositing
-- Success message shows new balance
+- User cannot increase balance directly from the client
+- User can create deposit requests
+- User can see request statuses from profile
+- Approved request increases balance only after admin action
+
+## Implementation Notes
+
+- Added `deposit_requests` table + indexes + RLS in `supabase/schema.sql`
+- Replaced direct `deposit` client flow in `app/(tabs)/profile.tsx`
+- Added recent request history directly inside profile screen
+- Legacy `deposit()` RPC now raises `DEPOSIT_DISABLED_USE_REQUEST`

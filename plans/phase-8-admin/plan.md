@@ -1,6 +1,6 @@
 ---
-title: "Phase 8: Admin — Dashboard, User Management, System Controls"
-description: "3 admin screens: dashboard stats, user ban/unban, sync/settle controls."
+title: "Phase 8: Admin — Dashboard, User Management, System Controls, Deposit Requests"
+description: "Admin screens: dashboard stats, user ban/unban, sync/settle controls, deposit request approval."
 status: partial
 priority: P1
 effort: 5h
@@ -12,11 +12,12 @@ created: 2026-03-15
 
 ## Overview
 
-3 admin screens — all replacing existing placeholders:
+Admin screens — all replacing existing placeholders:
 1. **SQL:** Deploy RPC `get_admin_stats`
 2. **S-A01:** Admin Dashboard (stats cards, hottest match, top 5 users)
 3. **S-A02:** User Management (list, search, ban/unban)
 4. **S-A03:** System Controls (Sync Now, Settle Now)
+5. **S-A04:** Deposit Requests (approve/reject user deposit requests)
 
 ## Pre-existing Infrastructure
 
@@ -37,6 +38,7 @@ created: 2026-03-15
 | 2 | S-A01: Admin Dashboard | Not Started ⏳ | 1.5h | [phase-02](./phase-02-dashboard.md) |
 | 3 | S-A02: User Management | Not Started ⏳ | 2h | [phase-03](./phase-03-user-management.md) |
 | 4 | S-A03: System Controls | Not Started ⏳ | 1h | [phase-04](./phase-04-system-controls.md) |
+| 5 | S-A04: Deposit Requests | Completed ✅ | 2-3h | [phase-05](./phase-05-deposit-requests.md) |
 
 ## Dependencies
 
@@ -54,6 +56,7 @@ created: 2026-03-15
 | Supabase Functions URL for sync/settle | Admin calls Edge Functions directly via `supabase.functions.invoke()` |
 | Search via `.or(ilike)` | Matches API Contract. Client-side search also acceptable for small user count |
 | No admin store | Admin screens are independent, local state sufficient. No Zustand needed |
+| Deposit approvals deserve dedicated admin UI | Approval work is operational, not system maintenance |
 
 ## Risks (Red-Team Review)
 
@@ -64,3 +67,4 @@ created: 2026-03-15
 | **Edge Function auth** — sync/settle need auth header | Medium | Use `supabase.functions.invoke()` which auto-attaches auth token. Edge Functions use `service_role` key internally |
 | **Hottest match NULL** — no bets yet = hottest_match is NULL | Low | Handle in UI: "Chưa có dữ liệu" |
 | **Large user list** — future: could have 100+ users | Low | Acceptable for student project. Add limit 100 if needed |
+| **Deposit queue mixed into wrong screen** | Medium | Prefer dedicated screen or segmented layout instead of burying it inside system controls |

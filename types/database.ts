@@ -27,6 +27,7 @@ export type BetType =
   | 'spreads';
 
 export type BetStatus = 'PENDING' | 'WON' | 'LOST' | 'CANCELLED';
+export type DepositRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
 // ---- Table Types ----
 
@@ -111,6 +112,17 @@ export interface Bet {
   created_at: string;
 }
 
+export interface DepositRequest {
+  id: string;
+  user_id: string;
+  amount: number;
+  status: DepositRequestStatus;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  admin_note: string | null;
+  created_at: string;
+}
+
 // ---- Joined types (for queries with joins) ----
 
 export interface MatchWithTeams extends Match {
@@ -121,6 +133,48 @@ export interface MatchWithTeams extends Match {
 
 export interface BetWithMatch extends Bet {
   match: MatchWithTeams;
+}
+
+export interface DepositRequestWithUser extends DepositRequest {
+  user?: Pick<User, 'id' | 'username' | 'email'> | null;
+}
+
+// ---- Parlay types ----
+
+export interface ParlayBet {
+  id: string;
+  user_id: string;
+  amount: number;
+  total_odds: number;
+  status: 'PENDING' | 'WON' | 'LOST';
+  winnings: number;
+  created_at: string;
+  settled_at: string | null;
+}
+
+export interface ParlayBetItem {
+  id: string;
+  parlay_bet_id: string;
+  match_id: string;
+  bet_type: BetType;
+  bet_choice: string;
+  odds: number;
+  result: 'PENDING' | 'WON' | 'LOST';
+  // Joined
+  match?: MatchWithTeams;
+}
+
+export interface ParlayBetWithItems extends ParlayBet {
+  items: ParlayBetItem[];
+}
+
+export interface ParlaySelection {
+  matchId: string;
+  matchLabel: string;   // e.g. "Arsenal vs Chelsea"
+  betType: BetType;
+  betChoice: string;
+  betLabel: string;     // e.g. "Arsenal thắng"
+  odds: number;
 }
 
 // ---- RPC response types ----
@@ -134,6 +188,11 @@ export interface PlaceBetResponse {
 }
 
 export interface DepositResponse {
+  new_balance: number;
+}
+
+export interface ApproveDepositRequestResponse {
+  request: DepositRequest;
   new_balance: number;
 }
 
@@ -162,10 +221,10 @@ export interface AdminStats {
     away_team_name: string;
     bet_count: number;
   } | null;
-  top_users: Array<{
+  top_users: {
     username: string;
     total_winnings: number;
-  }>;
+  }[];
 }
 
 // ---- Supabase Database type (for createClient<Database>) ----
@@ -198,6 +257,11 @@ export interface Database {
         Insert: Partial<Bet>;
         Update: Partial<Bet>;
       };
+      deposit_requests: {
+        Row: DepositRequest;
+        Insert: Partial<DepositRequest>;
+        Update: Partial<DepositRequest>;
+      };
     };
     Functions: {
       place_bet: {
@@ -213,6 +277,18 @@ export interface Database {
         Args: { p_amount: number };
         Returns: DepositResponse;
       };
+      create_deposit_request: {
+        Args: { p_amount: number };
+        Returns: DepositRequest;
+      };
+      approve_deposit_request: {
+        Args: { p_request_id: string; p_admin_note?: string | null };
+        Returns: ApproveDepositRequestResponse;
+      };
+      reject_deposit_request: {
+        Args: { p_request_id: string; p_admin_note?: string | null };
+        Returns: DepositRequest;
+      };
       get_user_stats: {
         Args: Record<string, never>;
         Returns: UserStats;
@@ -224,6 +300,19 @@ export interface Database {
       get_admin_stats: {
         Args: Record<string, never>;
         Returns: AdminStats;
+      };
+      place_parlay_bet: {
+        Args: {
+          p_selections: { match_id: string; bet_type: string; bet_choice: string }[];
+          p_amount: number;
+        };
+        Returns: {
+          id: string;
+          selections: number;
+          total_odds: number;
+          amount: number;
+          potential_win: number;
+        };
       };
     };
   };

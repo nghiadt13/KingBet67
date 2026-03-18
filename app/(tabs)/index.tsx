@@ -19,13 +19,14 @@ import { MatchWithTeams, League } from '@/types/database';
 
 const LIVE_POLL_INTERVAL = 30_000; // 30 seconds
 const PRIORITY_STATUSES = ['IN_PLAY', 'PAUSED', 'TIMED', 'SCHEDULED'] as const;
+const ALL_LEAGUES_ID = '__all_leagues__';
 
 export default function HomeScreen() {
   const router = useRouter();
   const { user, session, fetchUserProfile } = useAuthStore();
   const [matches, setMatches] = useState<MatchWithTeams[]>([]);
   const [leagues, setLeagues] = useState<League[]>([]);
-  const [selectedLeagueId, setSelectedLeagueId] = useState<string | null>(null);
+  const [selectedLeagueId, setSelectedLeagueId] = useState<string>(ALL_LEAGUES_ID);
   const [leagueFilterEnabled, setLeagueFilterEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -41,42 +42,44 @@ export default function HomeScreen() {
       if (error) throw error;
 
       const leagueData = (data as League[]) || [];
-      setLeagues(leagueData);
-      setLeagueFilterEnabled(leagueData.length > 0);
 
-      if (!selectedLeagueId && leagueData.length > 0) {
-        const premier = leagueData.find((l) => l.code === 'PL');
-        setSelectedLeagueId((premier || leagueData[0]).id);
+      // Only show leagues that actually have matches in the DB
+      const leaguesWithMatches: League[] = [];
+      for (const league of leagueData) {
+        const { count } = await supabase
+          .from('matches')
+          .select('*', { count: 'exact', head: true })
+          .eq('league_id', league.id);
+        if (count && count > 0) {
+          leaguesWithMatches.push(league);
+        }
       }
-    } catch (err) {
+
+      setLeagues(leaguesWithMatches);
+      setLeagueFilterEnabled(leaguesWithMatches.length > 0);
+    } catch {
       // Silent fallback for projects that have not applied multi-league migration yet.
       setLeagues([]);
-      setSelectedLeagueId(null);
+      setSelectedLeagueId(ALL_LEAGUES_ID);
       setLeagueFilterEnabled(false);
     }
-  }, [selectedLeagueId]);
+  }, []);
 
-  const fetchMatches = useCallback(async (leagueId: string | null) => {
+  const fetchMatches = useCallback(async (leagueId: string) => {
     let query = supabase
       .from('matches')
       .select(`
         *,
         home_team:teams!matches_home_team_id_fkey(*),
-        away_team:teams!matches_away_team_id_fkey(*)
+        away_team:teams!matches_away_team_id_fkey(*),
+        league:leagues(*)
       `)
       .in('status', [...PRIORITY_STATUSES])
       .order('utc_date', { ascending: true })
       .limit(30);
 
-    if (leagueFilterEnabled && leagueId) {
-      query = query
-        .select(`
-          *,
-          home_team:teams!matches_home_team_id_fkey(*),
-          away_team:teams!matches_away_team_id_fkey(*),
-          league:leagues(*)
-        `)
-        .eq('league_id', leagueId);
+    if (leagueFilterEnabled && leagueId !== ALL_LEAGUES_ID) {
+      query = query.eq('league_id', leagueId);
     }
 
     const { data, error } = await query;
@@ -99,7 +102,7 @@ export default function HomeScreen() {
     });
 
     setMatches(rows);
-  }, []);
+  }, [leagueFilterEnabled]);
 
   const bootstrap = useCallback(async () => {
     try {
@@ -117,7 +120,6 @@ export default function HomeScreen() {
   }, [bootstrap]);
 
   useEffect(() => {
-    if (leagueFilterEnabled && !selectedLeagueId) return;
 
     const run = async () => {
       try {
@@ -281,6 +283,14 @@ export default function HomeScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Giải đấu</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.leagueScroll}>
+              <TouchableOpacity
+                style={[styles.leagueChip, selectedLeagueId === ALL_LEAGUES_ID && styles.leagueChipActive]}
+                onPress={() => setSelectedLeagueId(ALL_LEAGUES_ID)}
+              >
+                <Text style={[styles.leagueChipText, selectedLeagueId === ALL_LEAGUES_ID && styles.leagueChipTextActive]}>
+                  Tất cả
+                </Text>
+              </TouchableOpacity>
               {leagues.map((league) => (
                 <TouchableOpacity
                   key={league.id}

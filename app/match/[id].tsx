@@ -17,7 +17,9 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Colors, Shadows } from '@/constants/colors';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
+import { useParlayStore } from '@/stores/parlayStore';
 import { MatchWithTeams, BetType } from '@/types/database';
+import BetSlip from '@/components/ui/BetSlip';
 
 const LIVE_POLL_INTERVAL = 30_000; // 30 seconds
 
@@ -51,6 +53,7 @@ export default function MatchDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { user, session, fetchUserProfile } = useAuthStore();
+  const { addSelection, hasSelection, hasMatchInSlip } = useParlayStore();
   const [match, setMatch] = useState<MatchWithTeams | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -340,12 +343,14 @@ export default function MatchDetailScreen() {
                   { label: 'Thua', choice: 'away', odds: odds.match_result.away },
                 ].map((item) => {
                   const isSelected = selectedOdd?.betType === 'match_result' && selectedOdd?.choice === item.choice;
+                  const inSlip = match ? hasSelection(match.id, 'match_result', item.choice) : false;
                   return (
                     <TouchableOpacity
                       key={item.choice}
-                      style={[styles.oddCard, isSelected && styles.oddCardSelected]}
+                      style={[styles.oddCard, isSelected && styles.oddCardSelected, inSlip && styles.oddCardInSlip]}
                       onPress={() => handleSelectOdd({ betType: 'match_result', ...item })}
                     >
+                      {inSlip && <View style={styles.slipIndicator}><MaterialIcons name="check" size={10} color={Colors.neonGreen} /></View>}
                       <Text style={styles.oddCardLabel}>{item.label}</Text>
                       <Text style={[styles.oddCardValue, isSelected && styles.oddCardValueSelected]}>
                         {item.odds.toFixed(2)}
@@ -375,12 +380,14 @@ export default function MatchDetailScreen() {
                         { label: 'Xỉu', choice: 'under', odds: line.data!.under },
                       ].map((item) => {
                         const isSelected = selectedOdd?.betType === line.key && selectedOdd?.choice === item.choice;
+                        const inSlip = match ? hasSelection(match.id, line.key, item.choice) : false;
                         return (
                           <TouchableOpacity
                             key={item.choice}
-                            style={[styles.oddCard, isSelected && styles.oddCardSelected]}
+                            style={[styles.oddCard, isSelected && styles.oddCardSelected, inSlip && styles.oddCardInSlip]}
                             onPress={() => handleSelectOdd({ betType: line.key, ...item })}
                           >
+                            {inSlip && <View style={styles.slipIndicator}><MaterialIcons name="check" size={10} color={Colors.neonGreen} /></View>}
                             <Text style={styles.oddCardLabel}>{item.label}</Text>
                             <Text style={[styles.oddCardValue, isSelected && styles.oddCardValueSelected]}>
                               {item.odds.toFixed(2)}
@@ -404,12 +411,14 @@ export default function MatchDetailScreen() {
                     { label: `${match.away_team?.short_name || 'Khách'} (${-odds.spreads.line > 0 ? '+' : ''}${-odds.spreads.line})`, choice: 'away', odds: odds.spreads.away },
                   ].map((item) => {
                     const isSelected = selectedOdd?.betType === 'spreads' && selectedOdd?.choice === item.choice;
+                    const inSlip = match ? hasSelection(match.id, 'spreads', item.choice) : false;
                     return (
                       <TouchableOpacity
                         key={item.choice}
-                        style={[styles.oddCard, isSelected && styles.oddCardSelected]}
+                        style={[styles.oddCard, isSelected && styles.oddCardSelected, inSlip && styles.oddCardInSlip]}
                         onPress={() => handleSelectOdd({ betType: 'spreads', ...item })}
                       >
+                        {inSlip && <View style={styles.slipIndicator}><MaterialIcons name="check" size={10} color={Colors.neonGreen} /></View>}
                         <Text style={styles.oddCardLabel} numberOfLines={1}>{item.label}</Text>
                         <Text style={[styles.oddCardValue, isSelected && styles.oddCardValueSelected]}>
                           {item.odds.toFixed(2)}
@@ -431,12 +440,14 @@ export default function MatchDetailScreen() {
                     { label: 'Không', choice: 'no', odds: odds.btts.no },
                   ].map((item) => {
                     const isSelected = selectedOdd?.betType === 'btts' && selectedOdd?.choice === item.choice;
+                    const inSlip = match ? hasSelection(match.id, 'btts', item.choice) : false;
                     return (
                       <TouchableOpacity
                         key={item.choice}
-                        style={[styles.oddCard, isSelected && styles.oddCardSelected]}
+                        style={[styles.oddCard, isSelected && styles.oddCardSelected, inSlip && styles.oddCardInSlip]}
                         onPress={() => handleSelectOdd({ betType: 'btts', ...item })}
                       >
+                        {inSlip && <View style={styles.slipIndicator}><MaterialIcons name="check" size={10} color={Colors.neonGreen} /></View>}
                         <Text style={styles.oddCardLabel}>{item.label}</Text>
                         <Text style={[styles.oddCardValue, isSelected && styles.oddCardValueSelected]}>
                           {item.odds.toFixed(2)}
@@ -459,12 +470,14 @@ export default function MatchDetailScreen() {
                     { label: 'Khách', choice: 'away', odds: odds.half_time.away },
                   ].map((item) => {
                     const isSelected = selectedOdd?.betType === 'half_time' && selectedOdd?.choice === item.choice;
+                    const inSlip = match ? hasSelection(match.id, 'half_time', item.choice) : false;
                     return (
                       <TouchableOpacity
                         key={item.choice}
-                        style={[styles.oddCard, isSelected && styles.oddCardSelected]}
+                        style={[styles.oddCard, isSelected && styles.oddCardSelected, inSlip && styles.oddCardInSlip]}
                         onPress={() => handleSelectOdd({ betType: 'half_time', ...item })}
                       >
+                        {inSlip && <View style={styles.slipIndicator}><MaterialIcons name="check" size={10} color={Colors.neonGreen} /></View>}
                         <Text style={styles.oddCardLabel}>{item.label}</Text>
                         <Text style={[styles.oddCardValue, isSelected && styles.oddCardValueSelected]}>
                           {item.odds.toFixed(2)}
@@ -577,17 +590,42 @@ export default function MatchDetailScreen() {
               </Text>
             </Text>
           )}
-          <TouchableOpacity
-            style={[styles.placeBetButton, placing && { opacity: 0.7 }]}
-            onPress={confirmAndPlaceBet}
-            disabled={placing}
-          >
-            {placing ? (
-              <ActivityIndicator color={Colors.black} />
-            ) : (
-              <Text style={styles.placeBetText}>Đặt cược ngay</Text>
-            )}
-          </TouchableOpacity>
+          {/* Action buttons row: single bet + add to parlay */}
+          <View style={styles.betActionsRow}>
+            <TouchableOpacity
+              style={[styles.placeBetButton, { flex: 1 }, placing && { opacity: 0.7 }]}
+              onPress={confirmAndPlaceBet}
+              disabled={placing}
+            >
+              {placing ? (
+                <ActivityIndicator color={Colors.black} />
+              ) : (
+                <Text style={styles.placeBetText}>Đặt đơn</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.addToParlayBtn}
+              onPress={() => {
+                if (!match || !selectedOdd) return;
+                const homeName = match.home_team?.short_name || 'Home';
+                const awayName = match.away_team?.short_name || 'Away';
+                addSelection({
+                  matchId: match.id,
+                  matchLabel: `${homeName} vs ${awayName}`,
+                  betType: selectedOdd.betType,
+                  betChoice: selectedOdd.choice,
+                  betLabel: selectedOdd.label,
+                  odds: selectedOdd.odds,
+                });
+                setSelectedOdd(null);
+                setBetAmount('');
+                Alert.alert('Đã thêm 🎫', `${selectedOdd.label} đã được thêm vào phiếu xiên`);
+              }}
+            >
+              <MaterialIcons name="playlist-add" size={20} color={Colors.neonGreen} />
+              <Text style={styles.addToParlayText}>Xiên</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 
@@ -595,8 +633,14 @@ export default function MatchDetailScreen() {
       {canBet && !selectedOdd && (
         <View style={styles.betCTA}>
           <Text style={styles.betCTAHint}>Chọn một kèo ở trên để đặt cược</Text>
+          {hasMatchInSlip(id) && (
+            <Text style={styles.betCTASlipHint}>🎫 Trận này đã có trong phiếu xiên</Text>
+          )}
         </View>
       )}
+
+      {/* Parlay Floating Bet Slip */}
+      <BetSlip />
     </View>
   );
 }
@@ -721,4 +765,20 @@ const styles = StyleSheet.create({
   },
   ouLineLabelText: { color: Colors.neonGreen, fontSize: 13, fontWeight: '800' },
   ouLineOdds: { flex: 1, flexDirection: 'row', gap: 10 },
+  // Parlay integration
+  oddCardInSlip: { borderColor: 'rgba(173,255,47,0.3)', backgroundColor: 'rgba(173,255,47,0.06)' },
+  slipIndicator: {
+    position: 'absolute', top: 4, right: 4,
+    width: 16, height: 16, borderRadius: 8,
+    backgroundColor: 'rgba(173,255,47,0.15)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  betActionsRow: { flexDirection: 'row', gap: 10 },
+  addToParlayBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,
+    backgroundColor: Colors.surfaceDark, borderWidth: 1, borderColor: Colors.neonGreenBorder,
+    paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12,
+  },
+  addToParlayText: { color: Colors.neonGreen, fontSize: 13, fontWeight: '700' },
+  betCTASlipHint: { color: Colors.neonGreen, fontSize: 12, textAlign: 'center', marginTop: 4 },
 });

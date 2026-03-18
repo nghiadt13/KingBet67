@@ -10,7 +10,7 @@ const MARGIN = 1.05;
 const DRAW_BASE = 0.26;
 
 const COMPETITIONS_ENDPOINT = "https://api.football-data.org/v4/competitions";
-const CORE_LEAGUE_CODES = ["PL", "CL", "EL"];
+const CORE_LEAGUE_CODES = ["PL", "CL", "BL1", "SA", "PD", "FL1"];
 const API_THROTTLE_MS = 250;
 
 // The Odds API integration
@@ -19,6 +19,10 @@ const LEAGUE_TO_ODDS_SPORT: Record<string, string> = {
   PL: "soccer_epl",
   CL: "soccer_uefa_champs_league",
   EL: "soccer_uefa_europa_league",
+  BL1: "soccer_germany_bundesliga",
+  SA: "soccer_italy_serie_a",
+  PD: "soccer_spain_la_liga",
+  FL1: "soccer_france_ligue_one",
 };
 
 function normalizeTeamName(name: string): string {
@@ -479,6 +483,17 @@ Deno.serve(async (req: Request) => {
       } catch (leagueErr) {
         const errorMessage = leagueErr instanceof Error ? leagueErr.message : String(leagueErr);
         console.error(`[sync-matches] league ${league.code} failed:`, errorMessage);
+
+        // If API returns 403 (not available on free tier), deactivate the league
+        // so the UI doesn't show an empty filter chip
+        if (errorMessage.includes("403")) {
+          console.warn(`[sync-matches] Deactivating league ${league.code} — API 403 (not in subscription)`);
+          await supabaseAdmin
+            .from("leagues")
+            .update({ is_active: false, updated_at: new Date().toISOString() })
+            .eq("id", league.id);
+        }
+
         leagueSummaries.push({
           code: league.code,
           teams: leagueTeamsUpdated,

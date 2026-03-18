@@ -27,7 +27,7 @@ export default function RootLayout() {
       // Admin → redirect to admin panel
       if (user.role === 'admin') {
         if (!inAdmin) {
-          router.replace('/(admin-tabs)');
+          router.replace('/(admin-tabs)/dashboard');
         }
       } else if (inAdmin) {
         // Non-admin user inside admin area → back to main tabs
