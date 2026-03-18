@@ -21,24 +21,30 @@ export default function RootLayout() {
     if (isLoading) return;
 
     const inAuth = segments[0] === '(auth)';
+    const inAdmin = segments[0] === '(admin-tabs)';
 
     if (session && user) {
       // Admin → redirect to admin panel
       if (user.role === 'admin') {
-        if (segments[0] !== '(admin-tabs)') {
+        if (!inAdmin) {
           router.replace('/(admin-tabs)');
         }
+      } else if (inAdmin) {
+        // Non-admin user inside admin area → back to main tabs
+        router.replace('/(tabs)');
       } else if (inAuth) {
         // Logged-in user on auth page → go to main tabs
         router.replace('/(tabs)');
       }
     } else if (!session && !inAuth) {
       // Guest user — let them browse (tabs) freely, no redirect
-      if (segments[0] !== '(tabs)' && segments[0] !== 'match' && segments[0] !== 'leaderboard') {
+      if (inAdmin) {
+        router.replace('/(tabs)');
+      } else if (segments[0] !== '(tabs)' && segments[0] !== 'match' && segments[0] !== 'leaderboard') {
         router.replace('/(tabs)');
       }
     }
-  }, [session, user, isLoading]);
+  }, [session, user, isLoading, segments, router]);
 
   if (isLoading) {
     return (

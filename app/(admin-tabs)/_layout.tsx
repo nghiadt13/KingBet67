@@ -1,8 +1,24 @@
-import { Tabs } from 'expo-router';
+import { Tabs, Redirect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import { View, ActivityIndicator } from 'react-native';
 import { Colors } from '@/constants/colors';
+import { useAuthStore } from '@/stores/authStore';
 
 export default function AdminTabsLayout() {
+  const { session, user, isLoading } = useAuthStore();
+
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: Colors.darkBg, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={Colors.neonGreen} />
+      </View>
+    );
+  }
+
+  if (!session || !user || user.role !== 'admin') {
+    return <Redirect href="/(tabs)" />;
+  }
+
   return (
     <Tabs
       screenOptions={{

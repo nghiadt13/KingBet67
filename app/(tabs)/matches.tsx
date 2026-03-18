@@ -15,27 +15,31 @@ import { Colors } from '@/constants/colors';
 import { supabase } from '@/lib/supabase';
 import { MatchWithTeams, MatchStatus, League } from '@/types/database';
 
-type FilterTab = 'live' | 'scheduled' | 'finished' | 'all';
+type FilterTab = 'live' | 'scheduled' | 'all';
 const ALL_LEAGUES_ID = '__all_leagues__';
 
-// Date filter helpers
+// Date filter helpers — use UTC-aware range to match DB timestamps
 function getDateRange(offset: number): { start: string; end: string; label: string } {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() + offset);
-  const start = d.toISOString();
-  d.setHours(23, 59, 59, 999);
-  const end = d.toISOString();
+  // Create date in local timezone for label
+  const local = new Date();
+  local.setHours(0, 0, 0, 0);
+  local.setDate(local.getDate() + offset);
 
   let label: string;
   if (offset === -1) label = 'Hôm qua';
   else if (offset === 0) label = 'Hôm nay';
   else if (offset === 1) label = 'Ngày mai';
   else {
-    const dayStr = d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
-    label = dayStr;
+    label = local.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
   }
-  return { start, end, label };
+
+  // Build start/end using local midnight boundaries → converts to UTC correctly
+  const startLocal = new Date(local);
+  startLocal.setHours(0, 0, 0, 0);
+  const endLocal = new Date(local);
+  endLocal.setHours(23, 59, 59, 999);
+
+  return { start: startLocal.toISOString(), end: endLocal.toISOString(), label };
 }
 
 const DATE_OFFSETS = [-1, 0, 1, 2, 3, 4, 5];
@@ -50,10 +54,12 @@ export default function MatchesScreen() {
   const [leagues, setLeagues] = useState<League[]>([]);
   const [selectedLeagueId, setSelectedLeagueId] = useState<string>(ALL_LEAGUES_ID);
   const [leagueFilterEnabled, setLeagueFilterEnabled] = useState(true);
+  const [leaguesLoaded, setLeaguesLoaded] = useState(false);
 
   const dateRange = useMemo(() => getDateRange(selectedDateOffset), [selectedDateOffset]);
   const dateChips = useMemo(() => DATE_OFFSETS.map(o => ({ offset: o, ...getDateRange(o) })), []);
 
+  // fetchLeagues: no dependencies — runs once on mount, does NOT reset date/filter state
   const fetchLeagues = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -67,21 +73,14 @@ export default function MatchesScreen() {
       const leagueData = (data as League[]) || [];
       setLeagues(leagueData);
       setLeagueFilterEnabled(leagueData.length > 0);
-
-      if (leagueData.length === 0) {
-        setSelectedLeagueId(ALL_LEAGUES_ID);
-      } else if (
-        selectedLeagueId !== ALL_LEAGUES_ID &&
-        !leagueData.some((l) => l.id === selectedLeagueId)
-      ) {
-        setSelectedLeagueId(ALL_LEAGUES_ID);
-      }
+      setLeaguesLoaded(true);
     } catch {
       setLeagues([]);
       setSelectedLeagueId(ALL_LEAGUES_ID);
       setLeagueFilterEnabled(false);
+      setLeaguesLoaded(true);
     }
-  }, [selectedLeagueId]);
+  }, []);
 
   const fetchMatches = useCallback(async (leagueId: string, range: { start: string; end: string }) => {
     let query = supabase
@@ -106,6 +105,7 @@ export default function MatchesScreen() {
     setMatches((data as unknown as MatchWithTeams[]) || []);
   }, [leagueFilterEnabled]);
 
+  // Mount: load leagues once
   useEffect(() => {
     const init = async () => {
       try {
@@ -113,14 +113,14 @@ export default function MatchesScreen() {
         await fetchLeagues();
       } catch (err) {
         console.error('Error loading leagues:', err);
-      } finally {
-        setLoading(false);
       }
     };
     init();
   }, [fetchLeagues]);
 
+  // Fetch matches whenever league, date, or leagueFilter changes
   useEffect(() => {
+    if (!leaguesLoaded) return; // wait for leagues to load first
     const run = async () => {
       try {
         setLoading(true);
@@ -132,7 +132,7 @@ export default function MatchesScreen() {
       }
     };
     run();
-  }, [selectedLeagueId, dateRange, fetchMatches, leagueFilterEnabled]);
+  }, [selectedLeagueId, dateRange, fetchMatches, leagueFilterEnabled, leaguesLoaded]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -167,15 +167,13 @@ export default function MatchesScreen() {
   const filteredMatches = useMemo(() => {
     if (activeFilter === 'live') return sortedMatches.filter((m) => isLive(m.status));
     if (activeFilter === 'scheduled') return sortedMatches.filter((m) => isScheduled(m.status));
-    if (activeFilter === 'finished') return sortedMatches.filter((m) => isFinished(m.status));
     return sortedMatches;
   }, [activeFilter, sortedMatches]);
 
   const filterTabs: { key: FilterTab; label: string; icon: string }[] = [
+    { key: 'all', label: 'Tất cả', icon: 'sports-soccer' },
     { key: 'live', label: 'Đang đá', icon: 'play-circle-filled' },
     { key: 'scheduled', label: 'Sắp đá', icon: 'schedule' },
-    { key: 'finished', label: 'Kết thúc', icon: 'check-circle' },
-    { key: 'all', label: 'Tất cả', icon: 'sports-soccer' },
   ];
 
   const getStatusBadge = (status: MatchStatus) => {

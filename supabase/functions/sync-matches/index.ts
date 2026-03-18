@@ -300,20 +300,36 @@ Deno.serve(async (req: Request) => {
       let leagueOddsCalculated = 0;
 
       try {
-        await sleep(API_THROTTLE_MS);
-        const standingsData = await fetchJson(
-          `https://api.football-data.org/v4/competitions/${league.code}/standings`,
-          headers,
-        );
+        // Standings: non-blocking — EL / CL may use groups instead of TOTAL table
+        let standingsTable: any[] = [];
+        try {
+          await sleep(API_THROTTLE_MS);
+          const standingsData = await fetchJson(
+            `https://api.football-data.org/v4/competitions/${league.code}/standings`,
+            headers,
+          );
+          // Try TOTAL first (PL, single-league-phase EL 2024+), then fallback to first group
+          standingsTable = standingsData?.standings
+            ?.find((s: any) => s.type === "TOTAL")?.table ?? [];
+          
+          // Fallback: if no TOTAL standings (group-based tournaments), collect all groups
+          if (standingsTable.length === 0 && standingsData?.standings?.length > 0) {
+            for (const standing of standingsData.standings) {
+              if (standing.table && Array.isArray(standing.table)) {
+                standingsTable.push(...standing.table);
+              }
+            }
+          }
+        } catch (standingsErr) {
+          console.warn(`[sync-matches] standings unavailable for ${league.code}, using defaults:`, 
+            standingsErr instanceof Error ? standingsErr.message : String(standingsErr));
+        }
 
         await sleep(API_THROTTLE_MS);
         const matchesData = await fetchJson(
           `https://api.football-data.org/v4/competitions/${league.code}/matches`,
           headers,
         );
-
-        const standingsTable = standingsData?.standings
-          ?.find((s: any) => s.type === "TOTAL")?.table ?? [];
 
         const positionByExternalTeamId = new Map<number, number>();
         const teamPayloadByExternalId = new Map<number, any>();

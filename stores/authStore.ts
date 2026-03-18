@@ -32,17 +32,19 @@ export const useAuthStore = create<AuthState>((set, get) => {
   initialize: async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      set({ session, isLoading: false });
+      set({ session, user: null, isAuthenticated: false });
 
       if (session) {
         await get().fetchUserProfile();
       }
 
+      set({ isLoading: false });
+
       // Only subscribe once
       if (!_authListenerActive) {
         _authListenerActive = true;
         supabase.auth.onAuthStateChange(async (_event, session) => {
-          set({ session });
+          set({ session, user: null, isAuthenticated: false });
           if (session) {
             await get().fetchUserProfile();
           } else {
@@ -128,7 +130,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
       set({ user: data as User, isAuthenticated: true });
     } catch {
       // Profile not ready yet (trigger may be slow)
-      set({ isAuthenticated: false });
+      set({ user: null, isAuthenticated: false });
     }
   },
 }});

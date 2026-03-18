@@ -25,6 +25,11 @@ export default function ProfileScreen() {
   const [depositAmount, setDepositAmount] = useState('');
   const [depositing, setDepositing] = useState(false);
 
+  const QUICK_AMOUNTS = [50000, 100000, 200000, 500000, 1000000];
+  const MAX_BALANCE = 50000000; // 50 triệu
+  const MIN_DEPOSIT = 10000;
+  const MAX_DEPOSIT = 10000000;
+
   const isGuest = !session || !user;
 
   const fetchStats = useCallback(async () => {
@@ -50,27 +55,59 @@ export default function ProfileScreen() {
     setRefreshing(false);
   }, [isGuest]);
 
+  const handleDepositAmountChange = (text: string) => {
+    // Only allow digits
+    const cleaned = text.replace(/[^0-9]/g, '');
+    setDepositAmount(cleaned);
+  };
+
+  const selectQuickAmount = (amount: number) => {
+    setDepositAmount(String(amount));
+  };
+
+  const formatInputDisplay = (val: string) => {
+    if (!val) return '';
+    return new Intl.NumberFormat('vi-VN').format(parseInt(val));
+  };
+
   const handleDeposit = async () => {
     const amount = parseInt(depositAmount);
     if (!amount || amount <= 0) {
       Alert.alert('Lỗi', 'Vui lòng nhập số tiền hợp lệ');
       return;
     }
-    if (amount < 10000) {
-      Alert.alert('Lỗi', 'Tối thiểu 10,000đ');
+    if (amount < MIN_DEPOSIT) {
+      Alert.alert('Lỗi', `Tối thiểu ${formatBalance(MIN_DEPOSIT)}đ`);
       return;
     }
-    if (amount > 10000000) {
-      Alert.alert('Lỗi', 'Tối đa 10,000,000đ mỗi lần nạp');
+    if (amount > MAX_DEPOSIT) {
+      Alert.alert('Lỗi', `Tối đa ${formatBalance(MAX_DEPOSIT)}đ mỗi lần nạp`);
       return;
     }
+    if (user && user.balance + amount > MAX_BALANCE) {
+      Alert.alert('Lỗi', `Số dư tối đa ${formatBalance(MAX_BALANCE)}đ. Bạn chỉ có thể nạp thêm ${formatBalance(MAX_BALANCE - user.balance)}đ`);
+      return;
+    }
+
+    // Confirmation dialog
+    Alert.alert(
+      'Xác nhận nạp điểm',
+      `Bạn muốn nạp ${formatBalance(amount)}đ vào tài khoản?\n\nSố dư sau nạp: ${formatBalance((user?.balance ?? 0) + amount)}đ`,
+      [
+        { text: 'Hủy', style: 'cancel' },
+        { text: 'Nạp ngay', style: 'default', onPress: () => executeDeposit(amount) },
+      ]
+    );
+  };
+
+  const executeDeposit = async (amount: number) => {
     setDepositing(true);
     try {
       const { error } = await supabase.rpc('deposit', { p_amount: amount });
       if (error) throw error;
       setDepositAmount('');
       await Promise.all([fetchUserProfile(), fetchStats()]);
-      Alert.alert('Thành công 🎉', `Đã nạp ${new Intl.NumberFormat('vi-VN').format(amount)}đ`);
+      Alert.alert('🎉 Thành công!', `Đã nạp ${formatBalance(amount)}đ vào tài khoản.\nSố dư hiện tại: ${formatBalance((user?.balance ?? 0) + amount)}đ`);
     } catch (err: any) {
       const msg = err.message || 'Nạp tiền thất bại';
       Alert.alert('Lỗi', msg.includes('INVALID_AMOUNT') ? 'Số tiền không hợp lệ' : msg);
@@ -188,30 +225,77 @@ export default function ProfileScreen() {
             <Text style={styles.balanceCurrency}>đ</Text>
           </Text>
 
-          {/* Deposit */}
-          <View style={styles.depositRow}>
-            <TextInput
-              style={styles.depositInput}
-              placeholder="Nhập số tiền..."
-              placeholderTextColor={Colors.textMuted}
-              value={depositAmount}
-              onChangeText={setDepositAmount}
-              keyboardType="number-pad"
-            />
-            <TouchableOpacity
-              style={styles.depositButton}
-              onPress={handleDeposit}
-              disabled={depositing}
-            >
-              {depositing ? (
-                <ActivityIndicator color={Colors.black} size="small" />
-              ) : (
-                <>
-                  <MaterialIcons name="add-circle" size={18} color={Colors.black} />
-                  <Text style={styles.depositButtonText}>Nạp điểm</Text>
-                </>
-              )}
-            </TouchableOpacity>
+          {/* Deposit Section */}
+          <View style={styles.depositSection}>
+            <Text style={styles.depositSectionTitle}>Nạp điểm</Text>
+
+            {/* Quick Amount Chips */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.quickAmountRow}>
+              {QUICK_AMOUNTS.map((amt) => (
+                <TouchableOpacity
+                  key={amt}
+                  style={[
+                    styles.quickAmountChip,
+                    depositAmount === String(amt) && styles.quickAmountChipActive,
+                  ]}
+                  onPress={() => selectQuickAmount(amt)}
+                >
+                  <Text style={[
+                    styles.quickAmountText,
+                    depositAmount === String(amt) && styles.quickAmountTextActive,
+                  ]}>
+                    {amt >= 1000000 ? `${amt / 1000000}M` : `${amt / 1000}K`}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {/* Amount Input */}
+            <View style={styles.depositInputRow}>
+              <View style={styles.depositInputWrapper}>
+                <TextInput
+                  style={styles.depositInput}
+                  placeholder="Nhập số tiền..."
+                  placeholderTextColor={Colors.textMuted}
+                  value={depositAmount}
+                  onChangeText={handleDepositAmountChange}
+                  keyboardType="number-pad"
+                />
+                {depositAmount ? (
+                  <Text style={styles.depositInputFormatted}>
+                    = {formatInputDisplay(depositAmount)}đ
+                  </Text>
+                ) : null}
+              </View>
+              <TouchableOpacity
+                style={[styles.depositButton, depositing && { opacity: 0.6 }]}
+                onPress={handleDeposit}
+                disabled={depositing || !depositAmount}
+              >
+                {depositing ? (
+                  <ActivityIndicator color={Colors.black} size="small" />
+                ) : (
+                  <>
+                    <MaterialIcons name="add-circle" size={18} color={Colors.black} />
+                    <Text style={styles.depositButtonText}>Nạp</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {/* Limits Info */}
+            <View style={styles.depositLimitsRow}>
+              <Text style={styles.depositLimitText}>
+                Min: {formatBalance(MIN_DEPOSIT)}đ
+              </Text>
+              <Text style={styles.depositLimitText}>
+                Max: {formatBalance(MAX_DEPOSIT)}đ/lần
+              </Text>
+              <Text style={styles.depositLimitText}>
+                Trần: {formatBalance(MAX_BALANCE)}đ
+              </Text>
+            </View>
           </View>
         </View>
 
@@ -406,17 +490,46 @@ const styles = StyleSheet.create({
   balanceLabel: { color: Colors.textSecondary, fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.8 },
   balanceAmount: { color: Colors.white, fontSize: 28, fontWeight: '900', marginTop: 4, marginBottom: 18 },
   balanceCurrency: { color: Colors.neonGreen, fontSize: 17 },
-  depositRow: { flexDirection: 'row', gap: 10 },
+  // Deposit
+  depositSection: { marginTop: 18 },
+  depositSectionTitle: {
+    color: Colors.textSecondary, fontSize: 11, fontWeight: '700',
+    textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10,
+  },
+  quickAmountRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  quickAmountChip: {
+    paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
+    borderWidth: 1, borderColor: 'rgba(100,116,139,0.3)',
+    backgroundColor: 'rgba(30,41,59,0.6)',
+  },
+  quickAmountChipActive: {
+    backgroundColor: Colors.neonGreenBg,
+    borderColor: Colors.neonGreen,
+  },
+  quickAmountText: { color: Colors.textSecondary, fontSize: 13, fontWeight: '600' },
+  quickAmountTextActive: { color: Colors.neonGreen },
+  depositInputRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  depositInputWrapper: { flex: 1 },
   depositInput: {
-    flex: 1, backgroundColor: Colors.darkBg, borderRadius: 10,
-    paddingHorizontal: 14, paddingVertical: 10, color: Colors.white, fontSize: 14,
-    borderWidth: 1, borderColor: 'rgba(100,116,139,0.2)',
+    backgroundColor: Colors.darkBg, borderRadius: 10,
+    paddingHorizontal: 14, paddingVertical: 10, color: Colors.white, fontSize: 16,
+    borderWidth: 1, borderColor: 'rgba(100,116,139,0.2)', fontWeight: '700',
+  },
+  depositInputFormatted: {
+    color: Colors.neonGreen, fontSize: 11, marginTop: 4, marginLeft: 4,
   },
   depositButton: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: Colors.neonGreen, paddingHorizontal: 16, borderRadius: 10,
+    backgroundColor: Colors.neonGreen, paddingHorizontal: 18, paddingVertical: 12, borderRadius: 10,
   },
-  depositButtonText: { color: Colors.black, fontSize: 13, fontWeight: '700' },
+  depositButtonText: { color: Colors.black, fontSize: 14, fontWeight: '700' },
+  depositLimitsRow: {
+    flexDirection: 'row', justifyContent: 'space-between', marginTop: 10,
+    paddingHorizontal: 4,
+  },
+  depositLimitText: {
+    color: Colors.textMuted, fontSize: 10, fontWeight: '500',
+  },
   // Stats
   statsGrid: { flexDirection: 'row', paddingHorizontal: 16, gap: 12, marginTop: 20 },
   statCard: {
