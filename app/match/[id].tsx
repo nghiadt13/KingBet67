@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Alert,
   TextInput,
+  AppState,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -17,6 +18,8 @@ import { Colors, Shadows } from '@/constants/colors';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import { MatchWithTeams, BetType } from '@/types/database';
+
+const LIVE_POLL_INTERVAL = 30_000; // 30 seconds
 
 const DEFAULT_SCORES_COUNT = 6;
 const MIN_BET = 10000;
@@ -47,7 +50,7 @@ interface OddOption {
 export default function MatchDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { user, fetchUserProfile } = useAuthStore();
+  const { user, session, fetchUserProfile } = useAuthStore();
   const [match, setMatch] = useState<MatchWithTeams | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -85,6 +88,66 @@ export default function MatchDetailScreen() {
     }
   };
 
+  // ── Auto-refresh khi trận đang live (chỉ update score, KHÔNG reset betting state) ──
+  const isLive = match?.status === 'IN_PLAY' || match?.status === 'PAUSED';
+  const liveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const appStateRef = useRef(AppState.currentState);
+
+  const silentRefreshMatch = useCallback(async () => {
+    if (!id) return;
+    try {
+      const { data, error } = await supabase
+        .from('matches')
+        .select(`
+          *,
+          home_team:teams!matches_home_team_id_fkey(*),
+          away_team:teams!matches_away_team_id_fkey(*)
+        `)
+        .eq('id', id)
+        .single();
+      if (!error && data) {
+        setMatch(data as unknown as MatchWithTeams);
+        // ❗ selectedOdd, betAmount KHONG bị reset
+      }
+    } catch {
+      // swallow – silent
+    }
+  }, [id]);
+
+  useEffect(() => {
+    const startPolling = () => {
+      if (liveIntervalRef.current) return;
+      liveIntervalRef.current = setInterval(silentRefreshMatch, LIVE_POLL_INTERVAL);
+    };
+    const stopPolling = () => {
+      if (liveIntervalRef.current) {
+        clearInterval(liveIntervalRef.current);
+        liveIntervalRef.current = null;
+      }
+    };
+
+    if (isLive && appStateRef.current === 'active') {
+      startPolling();
+    } else {
+      stopPolling();
+    }
+
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (appStateRef.current !== 'active' && nextState === 'active' && isLive) {
+        silentRefreshMatch();
+        startPolling();
+      } else if (nextState !== 'active') {
+        stopPolling();
+      }
+      appStateRef.current = nextState;
+    });
+
+    return () => {
+      stopPolling();
+      sub.remove();
+    };
+  }, [isLive, silentRefreshMatch]);
+
   const canBet = match && (match.status === 'TIMED' || match.status === 'SCHEDULED');
 
   const getStatusLabel = () => {
@@ -102,6 +165,19 @@ export default function MatchDetailScreen() {
   };
 
   const handleSelectOdd = (odd: OddOption) => {
+    // Guest → prompt to login
+    if (!session || !user) {
+      Alert.alert(
+        'Đăng nhập để đặt cược',
+        'Bạn cần tài khoản để tham gia cá cược',
+        [
+          { text: 'Để sau', style: 'cancel' },
+          { text: 'Đăng nhập', onPress: () => router.push('/(auth)/login') },
+          { text: 'Đăng ký', onPress: () => router.push('/(auth)/register') },
+        ]
+      );
+      return;
+    }
     setSelectedOdd(odd);
     setBetAmount('');
   };
@@ -125,6 +201,10 @@ export default function MatchDetailScreen() {
     }
     if (user && amount > user.balance) {
       Alert.alert('Lỗi', 'Số dư không đủ');
+      return;
+    }
+    if (!user) {
+      Alert.alert('Lỗi', 'Vui lòng đăng nhập trước');
       return;
     }
 
@@ -276,23 +356,61 @@ export default function MatchDetailScreen() {
               </View>
             )}
 
-            {/* Over/Under */}
-            {odds.over_under && (
+            {/* Over/Under — Multiple Lines */}
+            {(odds.over_under || odds.over_under_1_5 || odds.over_under_3_5) && (
               <>
-                <Text style={styles.oddsGroupTitle}>Tài / Xỉu 2.5</Text>
+                <Text style={styles.oddsGroupTitle}>Tài / Xỉu (Tổng bàn thắng)</Text>
+                {[
+                  { key: 'over_under_1_5' as const, label: '1.5', data: odds.over_under_1_5 },
+                  { key: 'over_under' as const, label: '2.5', data: odds.over_under },
+                  { key: 'over_under_3_5' as const, label: '3.5', data: odds.over_under_3_5 },
+                ].filter(line => line.data).map((line) => (
+                  <View key={line.key} style={styles.ouLineRow}>
+                    <View style={styles.ouLineLabel}>
+                      <Text style={styles.ouLineLabelText}>{line.label}</Text>
+                    </View>
+                    <View style={styles.ouLineOdds}>
+                      {[
+                        { label: 'Tài', choice: 'over', odds: line.data!.over },
+                        { label: 'Xỉu', choice: 'under', odds: line.data!.under },
+                      ].map((item) => {
+                        const isSelected = selectedOdd?.betType === line.key && selectedOdd?.choice === item.choice;
+                        return (
+                          <TouchableOpacity
+                            key={item.choice}
+                            style={[styles.oddCard, isSelected && styles.oddCardSelected]}
+                            onPress={() => handleSelectOdd({ betType: line.key, ...item })}
+                          >
+                            <Text style={styles.oddCardLabel}>{item.label}</Text>
+                            <Text style={[styles.oddCardValue, isSelected && styles.oddCardValueSelected]}>
+                              {item.odds.toFixed(2)}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+                ))}
+              </>
+            )}
+
+            {/* Spreads / Handicap */}
+            {odds.spreads && (
+              <>
+                <Text style={styles.oddsGroupTitle}>Kèo chấp ({odds.spreads.line > 0 ? '+' : ''}{odds.spreads.line})</Text>
                 <View style={styles.oddsGrid2}>
                   {[
-                    { label: 'Tài', choice: 'over', odds: odds.over_under.over },
-                    { label: 'Xỉu', choice: 'under', odds: odds.over_under.under },
+                    { label: `${match.home_team?.short_name || 'Chủ'} (${odds.spreads.line > 0 ? '+' : ''}${odds.spreads.line})`, choice: 'home', odds: odds.spreads.home },
+                    { label: `${match.away_team?.short_name || 'Khách'} (${-odds.spreads.line > 0 ? '+' : ''}${-odds.spreads.line})`, choice: 'away', odds: odds.spreads.away },
                   ].map((item) => {
-                    const isSelected = selectedOdd?.betType === 'over_under' && selectedOdd?.choice === item.choice;
+                    const isSelected = selectedOdd?.betType === 'spreads' && selectedOdd?.choice === item.choice;
                     return (
                       <TouchableOpacity
                         key={item.choice}
                         style={[styles.oddCard, isSelected && styles.oddCardSelected]}
-                        onPress={() => handleSelectOdd({ betType: 'over_under', ...item })}
+                        onPress={() => handleSelectOdd({ betType: 'spreads', ...item })}
                       >
-                        <Text style={styles.oddCardLabel}>{item.label}</Text>
+                        <Text style={styles.oddCardLabel} numberOfLines={1}>{item.label}</Text>
                         <Text style={[styles.oddCardValue, isSelected && styles.oddCardValueSelected]}>
                           {item.odds.toFixed(2)}
                         </Text>
@@ -592,4 +710,15 @@ const styles = StyleSheet.create({
     paddingVertical: 10, marginTop: 4,
   },
   showMoreText: { color: Colors.neonGreen, fontSize: 13, fontWeight: '600' },
+  // O/U multi-line layout
+  ouLineRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8,
+  },
+  ouLineLabel: {
+    width: 38, height: 38, borderRadius: 8,
+    backgroundColor: 'rgba(173,255,47,0.08)', borderWidth: 1, borderColor: 'rgba(173,255,47,0.2)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  ouLineLabelText: { color: Colors.neonGreen, fontSize: 13, fontWeight: '800' },
+  ouLineOdds: { flex: 1, flexDirection: 'row', gap: 10 },
 });

@@ -13,6 +13,32 @@ const COMPETITIONS_ENDPOINT = "https://api.football-data.org/v4/competitions";
 const CORE_LEAGUE_CODES = ["PL", "CL", "EL"];
 const API_THROTTLE_MS = 250;
 
+// The Odds API integration
+const ODDS_API_BASE = "https://api.the-odds-api.com/v4/sports";
+const LEAGUE_TO_ODDS_SPORT: Record<string, string> = {
+  PL: "soccer_epl",
+  CL: "soccer_uefa_champs_league",
+  EL: "soccer_uefa_europa_league",
+};
+
+function normalizeTeamName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/fc|cf|sc|afc|ssc|ac|as/gi, "")
+    .replace(/[^a-z0-9]/g, "")
+    .trim();
+}
+
+function fuzzyTeamMatch(apiName: string, dbName: string): boolean {
+  const a = normalizeTeamName(apiName);
+  const b = normalizeTeamName(dbName);
+  if (a === b) return true;
+  if (a.includes(b) || b.includes(a)) return true;
+  // Check if first 4 chars match (e.g. "arse" for Arsenal)
+  if (a.length >= 4 && b.length >= 4 && a.substring(0, 4) === b.substring(0, 4)) return true;
+  return false;
+}
+
 type LeagueRow = {
   id: string;
   code: string;
@@ -133,13 +159,57 @@ function calcCorrectScore(homePos: number, awayPos: number) {
   return result;
 }
 
+function calcOverUnder15(homePos: number, awayPos: number) {
+  const avgStrength = ((21 - homePos) + (21 - awayPos)) / 40;
+  const overProb = 0.62 + avgStrength * 0.12;
+  return {
+    over: clampOdds(MARGIN / overProb),
+    under: clampOdds(MARGIN / (1 - overProb)),
+  };
+}
+
+function calcOverUnder35(homePos: number, awayPos: number) {
+  const avgStrength = ((21 - homePos) + (21 - awayPos)) / 40;
+  const overProb = 0.30 + avgStrength * 0.18;
+  return {
+    over: clampOdds(MARGIN / overProb),
+    under: clampOdds(MARGIN / (1 - overProb)),
+  };
+}
+
+function calcSpreads(homePos: number, awayPos: number) {
+  const posDiff = awayPos - homePos;
+  let line = 0;
+  if (posDiff >= 8) line = -1.5;
+  else if (posDiff >= 4) line = -1;
+  else if (posDiff >= 1) line = -0.5;
+  else if (posDiff <= -8) line = 1.5;
+  else if (posDiff <= -4) line = 1;
+  else if (posDiff <= -1) line = 0.5;
+
+  const homeStrength = (21 - homePos) / 20;
+  const awayStrength = (21 - awayPos) / 20;
+  const adjHome = homeStrength * (1 + HOME_ADV);
+  const total = adjHome + awayStrength;
+  const homeProb = adjHome / total;
+
+  return {
+    home: clampOdds(MARGIN / homeProb),
+    away: clampOdds(MARGIN / (1 - homeProb)),
+    line,
+  };
+}
+
 function calculateOdds(homePos: number, awayPos: number) {
   return {
     match_result: calcMatchResult(homePos, awayPos),
     over_under: calcOverUnder(homePos, awayPos),
+    over_under_1_5: calcOverUnder15(homePos, awayPos),
+    over_under_3_5: calcOverUnder35(homePos, awayPos),
     btts: calcBTTS(homePos, awayPos),
     half_time: calcHalfTime(homePos, awayPos),
     correct_score: calcCorrectScore(homePos, awayPos),
+    spreads: calcSpreads(homePos, awayPos),
   };
 }
 
@@ -403,6 +473,133 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // ---- The Odds API: fetch real odds and merge ----
+    const oddsApiKey = Deno.env.get("ODDS_API_KEY");
+    let oddsApiRequestsUsed = 0;
+
+    if (oddsApiKey) {
+      for (const league of leagues) {
+        const sportKey = LEAGUE_TO_ODDS_SPORT[league.code];
+        if (!sportKey) continue;
+
+        try {
+          const oddsUrl = `${ODDS_API_BASE}/${sportKey}/odds/?apiKey=${oddsApiKey}&regions=eu&markets=h2h,totals,spreads&oddsFormat=decimal`;
+          const oddsRes = await fetch(oddsUrl);
+          if (!oddsRes.ok) {
+            console.warn(`[sync-matches] Odds API ${league.code} HTTP ${oddsRes.status}`);
+            continue;
+          }
+          oddsApiRequestsUsed++;
+          const oddsEvents: any[] = await oddsRes.json();
+
+          // Fetch current DB matches for this league to match by team name
+          const { data: dbMatches } = await supabaseAdmin
+            .from("matches")
+            .select("id, odds, home_team_id, away_team_id, status")
+            .eq("league_id", league.id)
+            .in("status", ["TIMED", "SCHEDULED"]);
+
+          if (!dbMatches || dbMatches.length === 0) continue;
+
+          // Build team name lookup
+          const teamIds = [
+            ...new Set(dbMatches.flatMap((m: any) => [m.home_team_id, m.away_team_id])),
+          ];
+          const { data: teamRows } = await supabaseAdmin
+            .from("teams")
+            .select("id, name, short_name")
+            .in("id", teamIds);
+
+          const teamNameById = new Map<string, { name: string; short_name: string }>();
+          for (const t of teamRows ?? []) {
+            teamNameById.set(t.id, { name: t.name, short_name: t.short_name });
+          }
+
+          // For each API event, find matching DB match
+          for (const event of oddsEvents) {
+            const apiHome = event.home_team ?? "";
+            const apiAway = event.away_team ?? "";
+
+            const matched = dbMatches.find((m: any) => {
+              const dbHome = teamNameById.get(m.home_team_id);
+              const dbAway = teamNameById.get(m.away_team_id);
+              if (!dbHome || !dbAway) return false;
+              return (
+                (fuzzyTeamMatch(apiHome, dbHome.name) || fuzzyTeamMatch(apiHome, dbHome.short_name)) &&
+                (fuzzyTeamMatch(apiAway, dbAway.name) || fuzzyTeamMatch(apiAway, dbAway.short_name))
+              );
+            });
+
+            if (!matched) continue;
+
+            const existingOdds = (matched.odds as any) ?? {};
+            const bookmakers = event.bookmakers ?? [];
+            if (bookmakers.length === 0) continue;
+
+            // Use first bookmaker that has odds (usually the best coverage)
+            const bk = bookmakers[0];
+
+            for (const market of bk.markets ?? []) {
+              if (market.key === "h2h") {
+                const outcomes = market.outcomes ?? [];
+                const homeOdd = outcomes.find((o: any) => o.name === apiHome);
+                const awayOdd = outcomes.find((o: any) => o.name === apiAway);
+                const drawOdd = outcomes.find((o: any) => o.name === "Draw");
+                if (homeOdd && awayOdd && drawOdd) {
+                  existingOdds.match_result = {
+                    home: homeOdd.price,
+                    draw: drawOdd.price,
+                    away: awayOdd.price,
+                  };
+                }
+              } else if (market.key === "totals") {
+                const outcomes = market.outcomes ?? [];
+                // Group by point value
+                for (const oc of outcomes) {
+                  const point = oc.point;
+                  const key = oc.name === "Over" ? "over" : "under";
+
+                  if (point === 1.5) {
+                    existingOdds.over_under_1_5 = existingOdds.over_under_1_5 ?? {};
+                    existingOdds.over_under_1_5[key] = oc.price;
+                  } else if (point === 2.5) {
+                    existingOdds.over_under = existingOdds.over_under ?? {};
+                    existingOdds.over_under[key] = oc.price;
+                  } else if (point === 3.5) {
+                    existingOdds.over_under_3_5 = existingOdds.over_under_3_5 ?? {};
+                    existingOdds.over_under_3_5[key] = oc.price;
+                  }
+                }
+              } else if (market.key === "spreads") {
+                const outcomes = market.outcomes ?? [];
+                const homeSpread = outcomes.find((o: any) => o.name === apiHome);
+                const awaySpread = outcomes.find((o: any) => o.name === apiAway);
+                if (homeSpread && awaySpread) {
+                  existingOdds.spreads = {
+                    home: homeSpread.price,
+                    away: awaySpread.price,
+                    line: homeSpread.point ?? 0,
+                  };
+                }
+              }
+            }
+
+            // Write merged odds back to DB
+            await supabaseAdmin
+              .from("matches")
+              .update({ odds: existingOdds, updated_at: new Date().toISOString() })
+              .eq("id", matched.id);
+          }
+
+          console.log(`[sync-matches] Odds API merged for ${league.code}: ${oddsEvents.length} events`);
+        } catch (oddsErr) {
+          console.warn(`[sync-matches] Odds API failed for ${league.code}:`, oddsErr);
+        }
+      }
+    } else {
+      console.log("[sync-matches] ODDS_API_KEY not set, using calculated odds only");
+    }
+
     const { data: unsettledMatches } = await supabaseAdmin
       .from("matches")
       .select("id")
@@ -435,6 +632,7 @@ Deno.serve(async (req: Request) => {
       teams_updated: teamsUpdated,
       matches_updated: matchesUpdated,
       odds_calculated: oddsCalculated,
+      odds_api_requests: oddsApiRequestsUsed,
       matches_settled: matchesSettled,
       bets_settled: betsSettled,
       total_winnings: totalWinnings,

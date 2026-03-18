@@ -6,9 +6,9 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
-
   ActivityIndicator,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 import { supabase } from '@/lib/supabase';
@@ -18,14 +18,20 @@ import { BetWithMatch, BetStatus } from '@/types/database';
 type FilterTab = 'all' | 'PENDING' | 'WON' | 'LOST';
 
 export default function BetsScreen() {
-  const { user } = useAuthStore();
+  const router = useRouter();
+  const { user, session } = useAuthStore();
   const [bets, setBets] = useState<BetWithMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
 
+  const isGuest = !session || !user;
+
   const fetchBets = useCallback(async () => {
-    if (!user) return;
+    if (isGuest) {
+      setLoading(false);
+      return;
+    }
     try {
       const { data, error } = await supabase
         .from('bets')
@@ -47,7 +53,7 @@ export default function BetsScreen() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, isGuest]);
 
   useEffect(() => {
     fetchBets();
@@ -63,13 +69,12 @@ export default function BetsScreen() {
     ? bets
     : bets.filter((b) => b.status === activeTab);
 
-
-
   const getStatusConfig = (status: BetStatus) => {
     switch (status) {
       case 'PENDING': return { text: 'Đang chờ', color: Colors.pendingYellow, bg: Colors.pendingYellowBg };
       case 'WON': return { text: 'Thắng', color: Colors.neonGreen, bg: Colors.neonGreenBg };
       case 'LOST': return { text: 'Thua', color: Colors.errorRed, bg: Colors.errorRedBg };
+      default: return { text: status, color: Colors.textMuted, bg: 'rgba(100,116,139,0.15)' };
     }
   };
 
@@ -77,7 +82,10 @@ export default function BetsScreen() {
     switch (betType) {
       case 'match_result': return 'Kết quả trận';
       case 'correct_score': return 'Tỉ số chính xác';
-      case 'over_under': return 'Tài/Xỉu';
+      case 'over_under': return 'Tài/Xỉu 2.5';
+      case 'over_under_1_5': return 'Tài/Xỉu 1.5';
+      case 'over_under_3_5': return 'Tài/Xỉu 3.5';
+      case 'spreads': return 'Kèo chấp';
       case 'btts': return 'Hai đội ghi bàn';
       case 'half_time': return 'Hiệp 1';
       default: return betType;
@@ -97,6 +105,31 @@ export default function BetsScreen() {
     { key: 'WON', label: 'Đã thắng' },
     { key: 'LOST', label: 'Đã thua' },
   ];
+
+  // Guest mode — show login prompt
+  if (isGuest) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <View style={{ width: 40 }} />
+          <Text style={styles.headerTitle}>KingBet67</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <View style={styles.guestPrompt}>
+          <MaterialIcons name="receipt-long" size={56} color={Colors.textMuted} />
+          <Text style={styles.guestTitle}>Đăng nhập để xem đơn cược</Text>
+          <Text style={styles.guestSubtitle}>Bạn cần tài khoản để đặt cược và theo dõi kết quả</Text>
+          <TouchableOpacity
+            style={styles.guestLoginBtn}
+            onPress={() => router.push('/(auth)/login')}
+          >
+            <MaterialIcons name="login" size={20} color={Colors.black} />
+            <Text style={styles.guestLoginText}>Đăng nhập</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   if (loading) {
     return (
@@ -223,6 +256,16 @@ const styles = StyleSheet.create({
   },
   headerTitle: { color: Colors.neonGreen, fontSize: 19, fontWeight: '700' },
   searchButton: { padding: 8 },
+  // Guest
+  guestPrompt: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 10 },
+  guestTitle: { color: Colors.white, fontSize: 18, fontWeight: '700', textAlign: 'center' },
+  guestSubtitle: { color: Colors.textSecondary, fontSize: 14, textAlign: 'center', lineHeight: 20, marginBottom: 12 },
+  guestLoginBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: Colors.neonGreen, paddingVertical: 14, paddingHorizontal: 40,
+    borderRadius: 12,
+  },
+  guestLoginText: { color: Colors.black, fontSize: 15, fontWeight: '800' },
   // Tabs
   tabBar: {
     flexDirection: 'row', paddingHorizontal: 16, gap: 24,

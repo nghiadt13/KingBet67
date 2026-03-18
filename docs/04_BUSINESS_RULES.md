@@ -70,24 +70,43 @@
   - Giống 1X2 nhưng dựa trên tỉ số hiệp 1
   - Kiểm tra: `score.halfTime.home` vs `score.halfTime.away`
 
+- **BR-D06: Tài/Xỉu 1.5**
+  - Tài: tổng bàn thắng > 1.5 (tức >= 2 bàn)
+  - Xỉu: tổng bàn thắng <= 1.5 (tức <= 1 bàn)
+  - Kiểm tra: `score.fullTime.home + score.fullTime.away`
+
+- **BR-D07: Tài/Xỉu 3.5**
+  - Tài: tổng bàn thắng > 3.5 (tức >= 4 bàn)
+  - Xỉu: tổng bàn thắng <= 3.5 (tức <= 3 bàn)
+  - Kiểm tra: `score.fullTime.home + score.fullTime.away`
+
+- **BR-D08: Kèo chấp (Spreads/Handicap)**
+  - Chọn: Home hoặc Away
+  - Line (mức chấp) được lưu trong odds JSON
+  - Kiểm tra: `home_score + line` so với `away_score`
+  - Nếu `home_score + line > away_score` → Home thắng
+  - Nếu `home_score + line < away_score` → Away thắng
+  - Nếu bằng nhau (push) → hoàn tiền (refund), status = CANCELLED
+
 ---
 
 ## Odds (Tỷ lệ cược)
 
-- **BR-E01:** Odds được tính tự động dựa trên standings (thứ hạng 2 đội)
+- **BR-E01:** Odds lấy từ The Odds API khi có sẵn (h2h, totals multi-line, spreads), fallback tự tính dựa trên standings
 - **BR-E02:** Đội thứ hạng cao hơn → odds thấp hơn (dễ thắng, lời ít)
 - **BR-E03:** Đội thứ hạng thấp hơn → odds cao hơn (khó thắng, lời nhiều)
 - **BR-E04:** Đội nhà có lợi thế, odds giảm nhẹ so với đội khách
 - **BR-E05:** Odds tối thiểu = 1.10 (không bao giờ thấp hơn)
 - **BR-E06:** Tỉ số chính xác có odds cao nhất (thường 5.0 - 50.0+)
-- **BR-E07:** Odds được tính khi sync matches và lưu vào DB, không tính lại mỗi lần user xem
+- **BR-E07:** Odds được tính/fetch khi sync matches và lưu vào DB, không tính lại mỗi lần user xem
 - **BR-E08:** Odds không thay đổi sau khi user đã đặt cược (bet lưu odds tại thời điểm đặt)
+- **BR-E09:** Kèo chấp push (bằng nhau sau khi cộng chấp) → hoàn tiền (refund)
 
 ---
 
 ## Trận đấu (Matches)
 
-- **BR-F01:** Data trận đấu lấy từ football-data.org API, chỉ Premier League
+- **BR-F01:** Data trận đấu lấy từ football-data.org API; odds lấy từ The Odds API + fallback tự tính
 - **BR-F02:** Trạng thái trận: TIMED/SCHEDULED → IN_PLAY → FINISHED (do API quyết định)
 - **BR-F03:** Trận POSTPONED (hoãn) → không cho đặt cược, hiển thị badge "Hoãn"
 - **BR-F04:** Trận CANCELLED → nếu có bets pending → refund tiền cho tất cả bets

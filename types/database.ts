@@ -20,8 +20,11 @@ export type BetType =
   | 'match_result'
   | 'correct_score'
   | 'over_under'
+  | 'over_under_1_5'
+  | 'over_under_3_5'
   | 'btts'
-  | 'half_time';
+  | 'half_time'
+  | 'spreads';
 
 export type BetStatus = 'PENDING' | 'WON' | 'LOST' | 'CANCELLED';
 
@@ -68,9 +71,12 @@ export interface League {
 export interface MatchOdds {
   match_result?: { home: number; draw: number; away: number };
   over_under?: { over: number; under: number };
+  over_under_1_5?: { over: number; under: number };
+  over_under_3_5?: { over: number; under: number };
   btts?: { yes: number; no: number };
   half_time?: { home: number; draw: number; away: number };
   correct_score?: Record<string, number>;
+  spreads?: { home: number; away: number; line: number };
 }
 
 export interface Match {

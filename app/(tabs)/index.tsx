@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   RefreshControl,
   Image,
   ActivityIndicator,
+  AppState,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -16,11 +17,12 @@ import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase';
 import { MatchWithTeams, League } from '@/types/database';
 
+const LIVE_POLL_INTERVAL = 30_000; // 30 seconds
 const PRIORITY_STATUSES = ['IN_PLAY', 'PAUSED', 'TIMED', 'SCHEDULED'] as const;
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { user, fetchUserProfile } = useAuthStore();
+  const { user, session, fetchUserProfile } = useAuthStore();
   const [matches, setMatches] = useState<MatchWithTeams[]>([]);
   const [leagues, setLeagues] = useState<League[]>([]);
   const [selectedLeagueId, setSelectedLeagueId] = useState<string | null>(null);
@@ -134,17 +136,15 @@ export default function HomeScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await Promise.all([
-        fetchUserProfile(),
-        fetchLeagues(),
-        fetchMatches(selectedLeagueId),
-      ]);
+      const tasks: Promise<void>[] = [fetchLeagues(), fetchMatches(selectedLeagueId)];
+      if (session) tasks.push(fetchUserProfile());
+      await Promise.all(tasks);
     } catch (err) {
       console.error('Refresh failed:', err);
     } finally {
       setRefreshing(false);
     }
-  }, [fetchLeagues, fetchMatches, fetchUserProfile, selectedLeagueId]);
+  }, [fetchLeagues, fetchMatches, fetchUserProfile, selectedLeagueId, session]);
 
   const liveMatches = useMemo(
     () => matches.filter((m) => m.status === 'IN_PLAY' || m.status === 'PAUSED'),
@@ -154,6 +154,57 @@ export default function HomeScreen() {
     () => matches.filter((m) => m.status === 'TIMED' || m.status === 'SCHEDULED'),
     [matches],
   );
+
+  // ── Auto-refresh khi có trận live ──────────────────────────────
+  const hasLive = liveMatches.length > 0;
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const appStateRef = useRef(AppState.currentState);
+
+  // Silent refresh – không set loading, không gây flicker
+  const silentRefresh = useCallback(async () => {
+    try {
+      await fetchMatches(selectedLeagueId);
+    } catch {
+      // swallow – silent background refresh
+    }
+  }, [fetchMatches, selectedLeagueId]);
+
+  useEffect(() => {
+    // Start / stop interval when live status changes
+    const startPolling = () => {
+      if (intervalRef.current) return; // already running
+      intervalRef.current = setInterval(silentRefresh, LIVE_POLL_INTERVAL);
+    };
+    const stopPolling = () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+
+    if (hasLive && appStateRef.current === 'active') {
+      startPolling();
+    } else {
+      stopPolling();
+    }
+
+    // Pause khi app background, resume khi foreground
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (appStateRef.current !== 'active' && nextState === 'active' && hasLive) {
+        // Quay lại foreground → refresh ngay + bật interval
+        silentRefresh();
+        startPolling();
+      } else if (nextState !== 'active') {
+        stopPolling();
+      }
+      appStateRef.current = nextState;
+    });
+
+    return () => {
+      stopPolling();
+      sub.remove();
+    };
+  }, [hasLive, silentRefresh]);
 
   const formatBalance = (balance: number) => new Intl.NumberFormat('vi-VN').format(balance) + 'đ';
 
@@ -197,10 +248,20 @@ export default function HomeScreen() {
           <Text style={styles.headerTitle}>KingBet67</Text>
         </View>
         <View style={styles.headerRight}>
-          <View style={styles.balanceContainer}>
-            <Text style={styles.balanceLabel}>Số dư</Text>
-            <Text style={styles.balanceValue}>{user ? formatBalance(user.balance) : '---'}</Text>
-          </View>
+          {user ? (
+            <View style={styles.balanceContainer}>
+              <Text style={styles.balanceLabel}>Số dư</Text>
+              <Text style={styles.balanceValue}>{formatBalance(user.balance)}</Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.balanceContainer}
+              onPress={() => router.push('/(auth)/login')}
+            >
+              <Text style={styles.balanceLabel}>Khách</Text>
+              <Text style={[styles.balanceValue, { fontSize: 11 }]}>Đăng nhập</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 

@@ -13,29 +13,29 @@ export default function RootLayout() {
 
   useEffect(() => {
     initialize();
-    // Set Android system navigation bar background to dark
     SystemUI.setBackgroundColorAsync(Colors.navBg);
   }, []);
 
-  // Auth redirect logic
+  // Auth redirect logic — only redirect admins; guests browse freely
   useEffect(() => {
     if (isLoading) return;
 
     const inAuth = segments[0] === '(auth)';
 
-    if (!session) {
-      if (!inAuth) {
-        router.replace('/(auth)/login');
-      }
-    } else if (user) {
+    if (session && user) {
+      // Admin → redirect to admin panel
       if (user.role === 'admin') {
         if (segments[0] !== '(admin-tabs)') {
           router.replace('/(admin-tabs)');
         }
-      } else {
-        if (segments[0] !== '(tabs)') {
-          router.replace('/(tabs)');
-        }
+      } else if (inAuth) {
+        // Logged-in user on auth page → go to main tabs
+        router.replace('/(tabs)');
+      }
+    } else if (!session && !inAuth) {
+      // Guest user — let them browse (tabs) freely, no redirect
+      if (segments[0] !== '(tabs)' && segments[0] !== 'match' && segments[0] !== 'leaderboard') {
+        router.replace('/(tabs)');
       }
     }
   }, [session, user, isLoading]);

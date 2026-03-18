@@ -82,7 +82,7 @@ CREATE TABLE IF NOT EXISTS public.bets (
   user_id     UUID        NOT NULL REFERENCES users(id),
   match_id    UUID        NOT NULL REFERENCES matches(id),
   bet_type    VARCHAR(20) NOT NULL
-              CHECK (bet_type IN ('match_result', 'correct_score', 'over_under', 'btts', 'half_time')),
+              CHECK (bet_type IN ('match_result', 'correct_score', 'over_under', 'over_under_1_5', 'over_under_3_5', 'btts', 'half_time', 'spreads')),
   bet_choice  VARCHAR(10) NOT NULL,
   amount      BIGINT      NOT NULL CHECK (amount > 0),
   odds        NUMERIC(6,2) NOT NULL,
@@ -91,6 +91,19 @@ CREATE TABLE IF NOT EXISTS public.bets (
   winnings    BIGINT      DEFAULT 0,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Migrate existing bet_type constraint to include new types
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'bets_bet_type_check' AND conrelid = 'public.bets'::regclass
+  ) THEN
+    ALTER TABLE public.bets DROP CONSTRAINT bets_bet_type_check;
+    ALTER TABLE public.bets ADD CONSTRAINT bets_bet_type_check
+      CHECK (bet_type IN ('match_result', 'correct_score', 'over_under', 'over_under_1_5', 'over_under_3_5', 'btts', 'half_time', 'spreads'));
+  END IF;
+END $$;
 
 -- Migrate existing constraint if it doesn't include CANCELLED
 DO $$
@@ -293,6 +306,8 @@ DECLARE
   v_won BOOLEAN;
   v_winnings BIGINT;
   v_actual_result VARCHAR;
+  v_line NUMERIC;
+  v_adj_home NUMERIC;
   v_bets_won INT := 0;
   v_bets_lost INT := 0;
   v_total_winnings BIGINT := 0;
@@ -357,6 +372,28 @@ BEGIN
           ELSIF v_match.half_time_home = v_match.half_time_away AND v_bet.bet_choice = 'draw' THEN v_won := true;
           ELSIF v_match.half_time_home < v_match.half_time_away AND v_bet.bet_choice = 'away' THEN v_won := true;
           END IF;
+        END IF;
+
+      WHEN 'over_under_1_5' THEN
+        IF (v_match.home_score + v_match.away_score) >= 2 AND v_bet.bet_choice = 'over' THEN v_won := true;
+        ELSIF (v_match.home_score + v_match.away_score) < 2 AND v_bet.bet_choice = 'under' THEN v_won := true;
+        END IF;
+
+      WHEN 'over_under_3_5' THEN
+        IF (v_match.home_score + v_match.away_score) >= 4 AND v_bet.bet_choice = 'over' THEN v_won := true;
+        ELSIF (v_match.home_score + v_match.away_score) < 4 AND v_bet.bet_choice = 'under' THEN v_won := true;
+        END IF;
+
+      WHEN 'spreads' THEN
+        v_line := COALESCE((v_match.odds -> 'spreads' ->> 'line')::NUMERIC, 0);
+        v_adj_home := v_match.home_score + v_line;
+        IF v_adj_home > v_match.away_score AND v_bet.bet_choice = 'home' THEN v_won := true;
+        ELSIF v_adj_home < v_match.away_score AND v_bet.bet_choice = 'away' THEN v_won := true;
+        ELSIF v_adj_home = v_match.away_score THEN
+          -- Push: refund the bet
+          UPDATE bets SET status = 'CANCELLED', winnings = v_bet.amount WHERE id = v_bet.id;
+          UPDATE users SET balance = balance + v_bet.amount WHERE id = v_bet.user_id;
+          CONTINUE;  -- skip the win/loss block below
         END IF;
     END CASE;
 

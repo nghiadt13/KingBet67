@@ -19,13 +19,16 @@ import { UserStats } from '@/types/database';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { user, signOut, fetchUserProfile } = useAuthStore();
+  const { user, session, signOut, fetchUserProfile } = useAuthStore();
   const [stats, setStats] = useState<UserStats | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [depositAmount, setDepositAmount] = useState('');
   const [depositing, setDepositing] = useState(false);
 
+  const isGuest = !session || !user;
+
   const fetchStats = useCallback(async () => {
+    if (isGuest) return;
     try {
       const { data, error } = await supabase.rpc('get_user_stats');
       if (error) throw error;
@@ -33,7 +36,7 @@ export default function ProfileScreen() {
     } catch (err) {
       console.error('Error fetching stats:', err);
     }
-  }, []);
+  }, [isGuest]);
 
   useEffect(() => {
     fetchStats();
@@ -41,9 +44,11 @@ export default function ProfileScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([fetchStats(), fetchUserProfile()]);
+    if (!isGuest) {
+      await Promise.all([fetchStats(), fetchUserProfile()]);
+    }
     setRefreshing(false);
-  }, []);
+  }, [isGuest]);
 
   const handleDeposit = async () => {
     const amount = parseInt(depositAmount);
@@ -84,6 +89,60 @@ export default function ProfileScreen() {
   const formatBalance = (balance: number) =>
     new Intl.NumberFormat('vi-VN').format(balance);
 
+  // --- Guest Mode ---
+  if (isGuest) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <View style={styles.headerLeftGroup}>
+            <MaterialIcons name="account-circle" size={24} color={Colors.neonGreen} />
+            <Text style={styles.headerTitle}>Tài khoản</Text>
+          </View>
+          <View style={{ width: 40 }} />
+        </View>
+
+        <View style={styles.guestContainer}>
+          <View style={styles.guestAvatarCircle}>
+            <MaterialIcons name="person-outline" size={56} color={Colors.textMuted} />
+          </View>
+          <Text style={styles.guestTitle}>Khách</Text>
+          <Text style={styles.guestSubtitle}>Đăng nhập để đặt cược, theo dõi vé cược và xem thống kê cá nhân</Text>
+
+          <TouchableOpacity
+            style={styles.loginButton}
+            onPress={() => router.push('/(auth)/login')}
+          >
+            <MaterialIcons name="login" size={20} color={Colors.black} />
+            <Text style={styles.loginButtonText}>Đăng nhập</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.registerButton}
+            onPress={() => router.push('/(auth)/register')}
+          >
+            <MaterialIcons name="person-add" size={20} color={Colors.neonGreen} />
+            <Text style={styles.registerButtonText}>Tạo tài khoản mới</Text>
+          </TouchableOpacity>
+
+          <View style={styles.guestFeatures}>
+            <Text style={styles.guestFeaturesTitle}>Bạn có thể làm gì khi chưa đăng nhập?</Text>
+            {[
+              { icon: 'sports-soccer', text: 'Xem danh sách trận đấu' },
+              { icon: 'visibility', text: 'Xem tỉ lệ cược' },
+              { icon: 'emoji-events', text: 'Xem bảng xếp hạng' },
+            ].map((item) => (
+              <View key={item.text} style={styles.guestFeatureRow}>
+                <MaterialIcons name={item.icon as any} size={18} color={Colors.neonGreen} />
+                <Text style={styles.guestFeatureText}>{item.text}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  // --- Logged-in Mode ---
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -300,6 +359,33 @@ const styles = StyleSheet.create({
   headerTitle: { color: Colors.white, fontSize: 17, fontWeight: '700' },
   settingsButton: { padding: 8, borderRadius: 20 },
   scrollContent: { paddingBottom: 20 },
+  // Guest mode
+  guestContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, paddingBottom: 60 },
+  guestAvatarCircle: {
+    width: 100, height: 100, borderRadius: 50,
+    borderWidth: 2, borderColor: Colors.textMuted, borderStyle: 'dashed',
+    backgroundColor: Colors.surfaceDark,
+    justifyContent: 'center', alignItems: 'center', marginBottom: 16,
+  },
+  guestTitle: { color: Colors.white, fontSize: 24, fontWeight: '800', marginBottom: 6 },
+  guestSubtitle: { color: Colors.textSecondary, fontSize: 14, textAlign: 'center', lineHeight: 20, marginBottom: 28 },
+  loginButton: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: Colors.neonGreen, paddingVertical: 14, paddingHorizontal: 40,
+    borderRadius: 12, marginBottom: 12, width: '100%', justifyContent: 'center',
+  },
+  loginButtonText: { color: Colors.black, fontSize: 15, fontWeight: '800' },
+  registerButton: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: 'transparent', paddingVertical: 14, paddingHorizontal: 40,
+    borderRadius: 12, borderWidth: 1, borderColor: Colors.neonGreenBorder,
+    width: '100%', justifyContent: 'center',
+  },
+  registerButtonText: { color: Colors.neonGreen, fontSize: 15, fontWeight: '700' },
+  guestFeatures: { marginTop: 32, width: '100%' },
+  guestFeaturesTitle: { color: Colors.textMuted, fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 },
+  guestFeatureRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
+  guestFeatureText: { color: Colors.textSecondary, fontSize: 14 },
   // Avatar
   avatarSection: { alignItems: 'center', paddingVertical: 24, gap: 6 },
   avatarCircle: {

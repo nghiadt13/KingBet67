@@ -15,21 +15,44 @@ import { Colors } from '@/constants/colors';
 import { supabase } from '@/lib/supabase';
 import { MatchWithTeams, MatchStatus, League } from '@/types/database';
 
-type FilterTab = 'priority' | 'live' | 'scheduled' | 'finished' | 'all';
+type FilterTab = 'live' | 'scheduled' | 'finished' | 'all';
 const ALL_LEAGUES_ID = '__all_leagues__';
+
+// Date filter helpers
+function getDateRange(offset: number): { start: string; end: string; label: string } {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + offset);
+  const start = d.toISOString();
+  d.setHours(23, 59, 59, 999);
+  const end = d.toISOString();
+
+  let label: string;
+  if (offset === -1) label = 'Hôm qua';
+  else if (offset === 0) label = 'Hôm nay';
+  else if (offset === 1) label = 'Ngày mai';
+  else {
+    const dayStr = d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+    label = dayStr;
+  }
+  return { start, end, label };
+}
+
+const DATE_OFFSETS = [-1, 0, 1, 2, 3, 4, 5];
 
 export default function MatchesScreen() {
   const router = useRouter();
   const [matches, setMatches] = useState<MatchWithTeams[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<FilterTab>('priority');
-  const [matchdays, setMatchdays] = useState<number[]>([]);
-  const [selectedMatchday, setSelectedMatchday] = useState<number | null>(null);
+  const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
+  const [selectedDateOffset, setSelectedDateOffset] = useState(0); // 0 = today
   const [leagues, setLeagues] = useState<League[]>([]);
   const [selectedLeagueId, setSelectedLeagueId] = useState<string>(ALL_LEAGUES_ID);
   const [leagueFilterEnabled, setLeagueFilterEnabled] = useState(true);
-  const [showFinishedInPriority, setShowFinishedInPriority] = useState(false);
+
+  const dateRange = useMemo(() => getDateRange(selectedDateOffset), [selectedDateOffset]);
+  const dateChips = useMemo(() => DATE_OFFSETS.map(o => ({ offset: o, ...getDateRange(o) })), []);
 
   const fetchLeagues = useCallback(async () => {
     try {
@@ -60,53 +83,21 @@ export default function MatchesScreen() {
     }
   }, [selectedLeagueId]);
 
-  const fetchMatchdays = useCallback(async (leagueId: string) => {
-    let query = supabase
-      .from('matches')
-      .select('matchday')
-      .order('matchday', { ascending: true });
-
-    if (leagueFilterEnabled && leagueId !== ALL_LEAGUES_ID) {
-      query = query.eq('league_id', leagueId);
-    }
-
-    const { data, error } = await query;
-
-    if (error) throw error;
-
-    const uniqueMatchdays = [...new Set((data || []).map((m) => m.matchday))].filter((md): md is number => typeof md === 'number');
-    setMatchdays(uniqueMatchdays);
-
-    if (uniqueMatchdays.length === 0) {
-      setSelectedMatchday(null);
-      return;
-    }
-
-    const latest = uniqueMatchdays[uniqueMatchdays.length - 1];
-    const current = selectedMatchday && uniqueMatchdays.includes(selectedMatchday) ? selectedMatchday : latest;
-    setSelectedMatchday(current);
-  }, [selectedMatchday, leagueFilterEnabled]);
-
-  const fetchMatches = useCallback(async (leagueId: string, matchday: number) => {
+  const fetchMatches = useCallback(async (leagueId: string, range: { start: string; end: string }) => {
     let query = supabase
       .from('matches')
       .select(`
         *,
         home_team:teams!matches_home_team_id_fkey(*),
-        away_team:teams!matches_away_team_id_fkey(*)
+        away_team:teams!matches_away_team_id_fkey(*),
+        league:leagues(*)
       `)
-      .eq('matchday', matchday)
+      .gte('utc_date', range.start)
+      .lte('utc_date', range.end)
       .order('utc_date', { ascending: true });
 
     if (leagueFilterEnabled && leagueId !== ALL_LEAGUES_ID) {
-      query = query
-        .select(`
-          *,
-          home_team:teams!matches_home_team_id_fkey(*),
-          away_team:teams!matches_away_team_id_fkey(*),
-          league:leagues(*)
-        `)
-        .eq('league_id', leagueId);
+      query = query.eq('league_id', leagueId);
     }
 
     const { data, error } = await query;
@@ -126,7 +117,6 @@ export default function MatchesScreen() {
         setLoading(false);
       }
     };
-
     init();
   }, [fetchLeagues]);
 
@@ -134,50 +124,29 @@ export default function MatchesScreen() {
     const run = async () => {
       try {
         setLoading(true);
-        await fetchMatchdays(selectedLeagueId);
-      } catch (err) {
-        console.error('Error fetching matchdays:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    run();
-  }, [selectedLeagueId, fetchMatchdays, leagueFilterEnabled]);
-
-  useEffect(() => {
-    if (selectedMatchday === null) return;
-
-    const run = async () => {
-      try {
-        setLoading(true);
-        await fetchMatches(selectedLeagueId, selectedMatchday);
+        await fetchMatches(selectedLeagueId, dateRange);
       } catch (err) {
         console.error('Error fetching matches:', err);
       } finally {
         setLoading(false);
       }
     };
-
     run();
-  }, [selectedLeagueId, selectedMatchday, fetchMatches, leagueFilterEnabled]);
+  }, [selectedLeagueId, dateRange, fetchMatches, leagueFilterEnabled]);
 
   const onRefresh = useCallback(async () => {
-    if (selectedMatchday === null) return;
-
     setRefreshing(true);
     try {
       await Promise.all([
         fetchLeagues(),
-        fetchMatchdays(selectedLeagueId),
-        fetchMatches(selectedLeagueId, selectedMatchday),
+        fetchMatches(selectedLeagueId, dateRange),
       ]);
     } catch (err) {
       console.error('Refresh failed:', err);
     } finally {
       setRefreshing(false);
     }
-  }, [fetchLeagues, fetchMatchdays, fetchMatches, selectedLeagueId, selectedMatchday]);
+  }, [fetchLeagues, fetchMatches, selectedLeagueId, dateRange]);
 
   const isLive = (status: MatchStatus) => status === 'IN_PLAY' || status === 'PAUSED';
   const isScheduled = (status: MatchStatus) => status === 'TIMED' || status === 'SCHEDULED';
@@ -185,15 +154,8 @@ export default function MatchesScreen() {
 
   const sortedMatches = useMemo(() => {
     const statusPriority: Record<string, number> = {
-      IN_PLAY: 0,
-      PAUSED: 1,
-      TIMED: 2,
-      SCHEDULED: 3,
-      FINISHED: 4,
-      POSTPONED: 5,
-      CANCELLED: 6,
+      IN_PLAY: 0, PAUSED: 1, TIMED: 2, SCHEDULED: 3, FINISHED: 4, POSTPONED: 5, CANCELLED: 6,
     };
-
     return [...matches].sort((a, b) => {
       const pa = statusPriority[a.status] ?? 99;
       const pb = statusPriority[b.status] ?? 99;
@@ -202,26 +164,14 @@ export default function MatchesScreen() {
     });
   }, [matches]);
 
-  const priorityMatches = useMemo(
-    () => sortedMatches.filter((m) => isLive(m.status) || isScheduled(m.status)),
-    [sortedMatches],
-  );
-
-  const endedMatches = useMemo(
-    () => sortedMatches.filter((m) => isFinished(m.status)),
-    [sortedMatches],
-  );
-
   const filteredMatches = useMemo(() => {
-    if (activeFilter === 'priority') return priorityMatches;
     if (activeFilter === 'live') return sortedMatches.filter((m) => isLive(m.status));
     if (activeFilter === 'scheduled') return sortedMatches.filter((m) => isScheduled(m.status));
     if (activeFilter === 'finished') return sortedMatches.filter((m) => isFinished(m.status));
     return sortedMatches;
-  }, [activeFilter, priorityMatches, sortedMatches]);
+  }, [activeFilter, sortedMatches]);
 
   const filterTabs: { key: FilterTab; label: string; icon: string }[] = [
-    { key: 'priority', label: 'Ưu tiên', icon: 'bolt' },
     { key: 'live', label: 'Đang đá', icon: 'play-circle-filled' },
     { key: 'scheduled', label: 'Sắp đá', icon: 'schedule' },
     { key: 'finished', label: 'Kết thúc', icon: 'check-circle' },
@@ -271,9 +221,16 @@ export default function MatchesScreen() {
         activeOpacity={0.8}
       >
         <View style={styles.matchCardHeader}>
-          <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}> 
-            {live && <View style={styles.liveDot} />}
-            <Text style={[styles.statusBadgeText, { color: badge.color }]}>{badge.text}</Text>
+          <View style={styles.headerLeftGroup}>
+            <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}> 
+              {live && <View style={styles.liveDot} />}
+              <Text style={[styles.statusBadgeText, { color: badge.color }]}>{badge.text}</Text>
+            </View>
+            {match.matchday > 0 && (
+              <View style={styles.matchdayBadge}>
+                <Text style={styles.matchdayBadgeText}>Vòng {match.matchday}</Text>
+              </View>
+            )}
           </View>
           <Text style={styles.matchTimeText}>
             {scheduled ? `${formatMatchTime(match.utc_date)} · ` : ''}
@@ -350,10 +307,7 @@ export default function MatchesScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.leagueScroll}>
             <TouchableOpacity
               style={[styles.leagueChip, selectedLeagueId === ALL_LEAGUES_ID && styles.leagueChipActive]}
-              onPress={() => {
-                setSelectedLeagueId(ALL_LEAGUES_ID);
-                setShowFinishedInPriority(false);
-              }}
+              onPress={() => setSelectedLeagueId(ALL_LEAGUES_ID)}
             >
               <Text style={[styles.leagueTextChip, selectedLeagueId === ALL_LEAGUES_ID && styles.leagueTextChipActive]}>
                 Tất cả giải
@@ -363,10 +317,7 @@ export default function MatchesScreen() {
               <TouchableOpacity
                 key={league.id}
                 style={[styles.leagueChip, selectedLeagueId === league.id && styles.leagueChipActive]}
-                onPress={() => {
-                  setSelectedLeagueId(league.id);
-                  setShowFinishedInPriority(false);
-                }}
+                onPress={() => setSelectedLeagueId(league.id)}
               >
                 <Text style={[styles.leagueTextChip, selectedLeagueId === league.id && styles.leagueTextChipActive]}>
                   {league.code}
@@ -377,19 +328,17 @@ export default function MatchesScreen() {
         </View>
       )}
 
-      <View style={styles.matchdayContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.matchdayScroll}>
-          {matchdays.map((md) => (
+      {/* Date filter replacing matchday */}
+      <View style={styles.dateContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateScroll}>
+          {dateChips.map((chip) => (
             <TouchableOpacity
-              key={md}
-              style={[styles.matchdayChip, selectedMatchday === md && styles.matchdayChipActive]}
-              onPress={() => {
-                setSelectedMatchday(md);
-                setShowFinishedInPriority(false);
-              }}
+              key={chip.offset}
+              style={[styles.dateChip, selectedDateOffset === chip.offset && styles.dateChipActive]}
+              onPress={() => setSelectedDateOffset(chip.offset)}
             >
-              <Text style={[styles.matchdayText, selectedMatchday === md && styles.matchdayTextActive]}>
-                Vòng {md}
+              <Text style={[styles.dateChipText, selectedDateOffset === chip.offset && styles.dateChipTextActive]}>
+                {chip.label}
               </Text>
             </TouchableOpacity>
           ))}
@@ -420,48 +369,14 @@ export default function MatchesScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.neonGreen} colors={[Colors.neonGreen]} />}
       >
-        {activeFilter === 'priority' && (
-          <>
-            {priorityMatches.length === 0 && (
-              <View style={styles.emptyState}>
-                <MaterialIcons name="sports-soccer" size={48} color={Colors.textMuted} />
-                <Text style={styles.emptyText}>Không có trận live hoặc sắp đá</Text>
-              </View>
-            )}
-
-            {priorityMatches.map(renderMatchCard)}
-
-            {endedMatches.length > 0 && (
-              <View style={styles.collapsibleWrap}>
-                <TouchableOpacity
-                  style={styles.collapsibleHeader}
-                  onPress={() => setShowFinishedInPriority((prev) => !prev)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.collapsibleTitle}>Đã kết thúc ({endedMatches.length})</Text>
-                  <MaterialIcons
-                    name={showFinishedInPriority ? 'expand-less' : 'expand-more'}
-                    size={20}
-                    color={Colors.textMuted}
-                  />
-                </TouchableOpacity>
-                {showFinishedInPriority && endedMatches.map(renderMatchCard)}
-              </View>
-            )}
-          </>
+        {filteredMatches.length === 0 && (
+          <View style={styles.emptyState}>
+            <MaterialIcons name="sports-soccer" size={48} color={Colors.textMuted} />
+            <Text style={styles.emptyText}>Không có trận đấu</Text>
+            <Text style={styles.emptySubText}>Thử chọn ngày khác hoặc giải khác</Text>
+          </View>
         )}
-
-        {activeFilter !== 'priority' && (
-          <>
-            {filteredMatches.length === 0 && (
-              <View style={styles.emptyState}>
-                <MaterialIcons name="sports-soccer" size={48} color={Colors.textMuted} />
-                <Text style={styles.emptyText}>Không có trận đấu</Text>
-              </View>
-            )}
-            {filteredMatches.map(renderMatchCard)}
-          </>
-        )}
+        {filteredMatches.map(renderMatchCard)}
       </ScrollView>
     </View>
   );
@@ -485,15 +400,17 @@ const styles = StyleSheet.create({
   leagueChipActive: { backgroundColor: Colors.neonGreenBg, borderColor: Colors.neonGreenBorder },
   leagueTextChip: { color: Colors.textMuted, fontSize: 12, fontWeight: '700' },
   leagueTextChipActive: { color: Colors.neonGreen },
-  matchdayContainer: { borderBottomWidth: 0.5, borderBottomColor: 'rgba(100,116,139,0.2)' },
-  matchdayScroll: { paddingHorizontal: 12, paddingVertical: 10, gap: 6 },
-  matchdayChip: {
+  // Date filter chips
+  dateContainer: { borderBottomWidth: 0.5, borderBottomColor: 'rgba(100,116,139,0.2)' },
+  dateScroll: { paddingHorizontal: 12, paddingVertical: 10, gap: 6 },
+  dateChip: {
     paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20,
     backgroundColor: 'rgba(30,41,59,0.5)', borderWidth: 1, borderColor: 'rgba(100,116,139,0.15)', marginRight: 6,
   },
-  matchdayChipActive: { backgroundColor: Colors.neonGreenBg, borderColor: Colors.neonGreenBorder },
-  matchdayText: { color: Colors.textMuted, fontSize: 12, fontWeight: '600' },
-  matchdayTextActive: { color: Colors.neonGreen },
+  dateChipActive: { backgroundColor: Colors.neonGreenBg, borderColor: Colors.neonGreenBorder },
+  dateChipText: { color: Colors.textMuted, fontSize: 12, fontWeight: '600' },
+  dateChipTextActive: { color: Colors.neonGreen },
+  // Status filter
   filterContainer: { borderBottomWidth: 0.5, borderBottomColor: 'rgba(100,116,139,0.1)' },
   filterScroll: { paddingHorizontal: 12, paddingVertical: 8, gap: 6 },
   filterChip: {
@@ -512,12 +429,18 @@ const styles = StyleSheet.create({
   },
   matchCardLive: { borderColor: 'rgba(239,68,68,0.3)' },
   matchCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  headerLeftGroup: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   statusBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6,
   },
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.liveRed },
   statusBadgeText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  matchdayBadge: {
+    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
+    backgroundColor: 'rgba(100,116,139,0.12)',
+  },
+  matchdayBadgeText: { color: Colors.textMuted, fontSize: 9, fontWeight: '600' },
   matchTimeText: { color: Colors.textMuted, fontSize: 11 },
   matchTeamsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   matchTeamCol: { flex: 1, alignItems: 'center', gap: 6 },
@@ -541,20 +464,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(100,116,139,0.12)',
   },
   oddsValue: { color: Colors.neonGreen, fontSize: 12, fontWeight: '700' },
-  collapsibleWrap: { marginTop: 6, marginBottom: 10 },
-  collapsibleHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: 'rgba(30,41,59,0.35)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(100,116,139,0.15)',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 8,
-  },
-  collapsibleTitle: { color: Colors.textMuted, fontSize: 12, fontWeight: '700' },
   emptyState: { alignItems: 'center', justifyContent: 'center', paddingTop: 80, gap: 12 },
   emptyText: { color: Colors.textMuted, fontSize: 14 },
+  emptySubText: { color: Colors.textMuted, fontSize: 12 },
 });
