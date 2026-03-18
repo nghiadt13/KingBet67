@@ -59,6 +59,13 @@ export default function AdminTabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="feedbacks"
+        options={{
+          title: 'Góp ý',
+          tabBarIcon: ({ color, size }) => <MaterialIcons name="rate-review" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="system"
         options={{
           title: 'System',

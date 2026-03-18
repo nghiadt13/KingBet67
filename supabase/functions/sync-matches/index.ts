@@ -306,12 +306,19 @@ Deno.serve(async (req: Request) => {
       try {
         // Standings: non-blocking — EL / CL may use groups instead of TOTAL table
         let standingsTable: any[] = [];
+        let rawStandingsGroups: any[] = []; // preserve group info for standings table
         try {
           await sleep(API_THROTTLE_MS);
           const standingsData = await fetchJson(
             `https://api.football-data.org/v4/competitions/${league.code}/standings`,
             headers,
           );
+
+          // Save raw standings with group info for the standings table
+          rawStandingsGroups = (standingsData?.standings ?? []).filter(
+            (s: any) => s.type === "TOTAL" && s.table && Array.isArray(s.table)
+          );
+
           // Try TOTAL first (PL, single-league-phase EL 2024+), then fallback to first group
           standingsTable = standingsData?.standings
             ?.find((s: any) => s.type === "TOTAL")?.table ?? [];
@@ -472,6 +479,50 @@ Deno.serve(async (req: Request) => {
             (m: any) => m.status === "TIMED" || m.status === "SCHEDULED",
           ).length;
           oddsCalculated += leagueOddsCalculated;
+        }
+
+        // ---- Upsert standings with group info ----
+        if (rawStandingsGroups.length > 0) {
+          const standingsToUpsert: any[] = [];
+
+          for (const standing of rawStandingsGroups) {
+            const groupName = standing.group || "LEAGUE";
+            const stage = standing.stage || "REGULAR_SEASON";
+
+            for (const entry of standing.table ?? []) {
+              const teamId = teamIdMap.get(entry.team.id);
+              if (!teamId) continue;
+
+              standingsToUpsert.push({
+                league_id: league.id,
+                team_id: teamId,
+                group_name: groupName,
+                stage,
+                position: entry.position ?? 0,
+                played_games: entry.playedGames ?? 0,
+                won: entry.won ?? 0,
+                draw: entry.draw ?? 0,
+                lost: entry.lost ?? 0,
+                goals_for: entry.goalsFor ?? 0,
+                goals_against: entry.goalsAgainst ?? 0,
+                goal_difference: entry.goalDifference ?? 0,
+                points: entry.points ?? 0,
+                updated_at: new Date().toISOString(),
+              });
+            }
+          }
+
+          if (standingsToUpsert.length > 0) {
+            const { error: standingsError } = await supabaseAdmin
+              .from("standings")
+              .upsert(standingsToUpsert, { onConflict: "league_id,team_id,group_name" });
+
+            if (standingsError) {
+              console.warn(`[sync-matches] standings upsert failed for ${league.code}:`, standingsError.message);
+            } else {
+              console.log(`[sync-matches] standings upserted: ${standingsToUpsert.length} entries for ${league.code}`);
+            }
+          }
         }
 
         leagueSummaries.push({

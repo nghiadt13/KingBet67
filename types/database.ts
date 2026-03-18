@@ -28,6 +28,8 @@ export type BetType =
 
 export type BetStatus = 'PENDING' | 'WON' | 'LOST' | 'CANCELLED';
 export type DepositRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type FeedbackStatus = 'NEW' | 'READ' | 'RESOLVED';
+export type FeedbackCategory = 'general' | 'bug' | 'feature' | 'other';
 
 // ---- Table Types ----
 
@@ -123,6 +125,34 @@ export interface DepositRequest {
   created_at: string;
 }
 
+export interface Feedback {
+  id: string;
+  user_id: string;
+  category: FeedbackCategory;
+  message: string;
+  status: FeedbackStatus;
+  admin_note: string | null;
+  created_at: string;
+}
+
+export interface StandingEntry {
+  id: string;
+  league_id: string;
+  team_id: string;
+  group_name: string;
+  stage: string;
+  position: number;
+  played_games: number;
+  won: number;
+  draw: number;
+  lost: number;
+  goals_for: number;
+  goals_against: number;
+  goal_difference: number;
+  points: number;
+  updated_at: string;
+}
+
 // ---- Joined types (for queries with joins) ----
 
 export interface MatchWithTeams extends Match {
@@ -137,6 +167,14 @@ export interface BetWithMatch extends Bet {
 
 export interface DepositRequestWithUser extends DepositRequest {
   user?: Pick<User, 'id' | 'username' | 'email'> | null;
+}
+
+export interface FeedbackWithUser extends Feedback {
+  user?: Pick<User, 'id' | 'username' | 'email'> | null;
+}
+
+export interface StandingWithTeam extends StandingEntry {
+  team: Pick<Team, 'id' | 'name' | 'short_name' | 'tla' | 'crest_url'>;
 }
 
 // ---- Parlay types ----
@@ -313,6 +351,10 @@ export interface Database {
           amount: number;
           potential_win: number;
         };
+      };
+      submit_feedback: {
+        Args: { p_category?: string; p_message: string };
+        Returns: Feedback;
       };
     };
   };

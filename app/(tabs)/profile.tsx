@@ -512,7 +512,7 @@ export default function ProfileScreen() {
           <Text style={styles.menuSectionTitle}>Cài đặt tài khoản</Text>
 
           <TouchableOpacity style={styles.menuItem}
-            onPress={() => Alert.alert('Thông tin cá nhân', 'Tính năng đang phát triển')}
+            onPress={() => router.push('/profile/personal-info')}
           >
             <View style={styles.menuItemLeft}>
               <MaterialIcons name="person" size={22} color={Colors.textSecondary} />
@@ -533,17 +533,7 @@ export default function ProfileScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.menuItem}
-            onPress={() => Alert.alert('Bảo mật', 'Tính năng đang phát triển')}
-          >
-            <View style={styles.menuItemLeft}>
-              <MaterialIcons name="security" size={22} color={Colors.textSecondary} />
-              <Text style={styles.menuItemText}>Bảo mật</Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={22} color={Colors.textMuted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.menuItem}
-            onPress={() => Alert.alert('Hỗ trợ & Góp ý', 'Tính năng đang phát triển')}
+            onPress={() => router.push('/profile/support')}
           >
             <View style={styles.menuItemLeft}>
               <MaterialIcons name="contact-support" size={22} color={Colors.textSecondary} />
