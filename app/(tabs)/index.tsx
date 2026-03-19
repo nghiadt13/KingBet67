@@ -9,9 +9,13 @@ import {
   Image,
   ActivityIndicator,
   AppState,
+  Dimensions,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '@/constants/colors';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase';
@@ -20,6 +24,36 @@ import { MatchWithTeams, League } from '@/types/database';
 const LIVE_POLL_INTERVAL = 30_000; // 30 seconds
 const PRIORITY_STATUSES = ['IN_PLAY', 'PAUSED', 'TIMED', 'SCHEDULED'] as const;
 const ALL_LEAGUES_ID = '__all_leagues__';
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const CAROUSEL_AUTO_INTERVAL = 4000; // 4 seconds
+
+// ── Banner data ──────────────────────────────────────────────────
+const BANNERS = [
+  {
+    key: 'parlay',
+    title: 'Đặt kèo xiên',
+    subtitle: 'Nhân đôi cơ hội chiến thắng!',
+    icon: 'casino' as const,
+    gradientColors: ['#0d9488', '#065f46', '#022c22'] as const,
+    route: '/matches',
+  },
+  {
+    key: 'hot',
+    title: 'Trận nóng hôm nay',
+    subtitle: 'Xem ngay các trận đấu đang diễn ra',
+    icon: 'local-fire-department' as const,
+    gradientColors: ['#ea580c', '#dc2626', '#7f1d1d'] as const,
+    route: '/matches',
+  },
+  {
+    key: 'standings',
+    title: 'Bảng xếp hạng',
+    subtitle: 'Cập nhật thứ hạng mới nhất',
+    icon: 'emoji-events' as const,
+    gradientColors: ['#d97706', '#b45309', '#451a03'] as const,
+    route: '/(tabs)/standings',
+  },
+];
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -30,6 +64,11 @@ export default function HomeScreen() {
   const [leagueFilterEnabled, setLeagueFilterEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Carousel state
+  const [activeBanner, setActiveBanner] = useState(0);
+  const carouselRef = useRef<ScrollView>(null);
+  const carouselTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchLeagues = useCallback(async () => {
     try {
@@ -208,6 +247,26 @@ export default function HomeScreen() {
     };
   }, [hasLive, silentRefresh]);
 
+  // ── Carousel auto-scroll ───────────────────────────────────────
+  useEffect(() => {
+    carouselTimerRef.current = setInterval(() => {
+      setActiveBanner((prev) => {
+        const next = (prev + 1) % BANNERS.length;
+        carouselRef.current?.scrollTo({ x: next * (SCREEN_WIDTH - 32), animated: true });
+        return next;
+      });
+    }, CAROUSEL_AUTO_INTERVAL);
+
+    return () => {
+      if (carouselTimerRef.current) clearInterval(carouselTimerRef.current);
+    };
+  }, []);
+
+  const onCarouselScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const idx = Math.round(e.nativeEvent.contentOffset.x / (SCREEN_WIDTH - 32));
+    setActiveBanner(idx);
+  }, []);
+
   const formatBalance = (balance: number) => new Intl.NumberFormat('vi-VN').format(balance) + 'đ';
 
   const formatMatchTime = (utcDate: string) => {
@@ -224,13 +283,6 @@ export default function HomeScreen() {
     if (date.toDateString() === tomorrow.toDateString()) return 'Ngày mai';
     return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
   };
-
-  const featureCards = [
-    { key: 'matches', title: 'Trận đấu', subtitle: 'Live + sắp diễn ra', icon: 'sports-soccer', route: '/matches' },
-    { key: 'bets', title: 'Đơn cược', subtitle: 'Theo dõi vé đã đặt', icon: 'receipt-long', route: '/bets' },
-    { key: 'leaderboard', title: 'BXH', subtitle: 'Top người chơi', icon: 'emoji-events', route: '/leaderboard' },
-    { key: 'profile', title: 'Hồ sơ', subtitle: 'Số dư và thống kê', icon: 'person', route: '/profile' },
-  ];
 
   if (loading && matches.length === 0) {
     return (
@@ -279,25 +331,73 @@ export default function HomeScreen() {
           />
         }
       >
+        {/* ── League Logo Carousel ─────────────────────────────── */}
         {leagues.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Giải đấu</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.leagueScroll}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.leagueLogoScroll}
+            >
               <TouchableOpacity
-                style={[styles.leagueChip, selectedLeagueId === ALL_LEAGUES_ID && styles.leagueChipActive]}
+                style={[
+                  styles.leagueLogoItem,
+                  selectedLeagueId === ALL_LEAGUES_ID && styles.leagueLogoItemActive,
+                ]}
                 onPress={() => setSelectedLeagueId(ALL_LEAGUES_ID)}
               >
-                <Text style={[styles.leagueChipText, selectedLeagueId === ALL_LEAGUES_ID && styles.leagueChipTextActive]}>
+                <View
+                  style={[
+                    styles.leagueLogoCircle,
+                    selectedLeagueId === ALL_LEAGUES_ID && styles.leagueLogoCircleActive,
+                  ]}
+                >
+                  <MaterialIcons
+                    name="sports-soccer"
+                    size={24}
+                    color={selectedLeagueId === ALL_LEAGUES_ID ? Colors.neonGreen : Colors.textMuted}
+                  />
+                </View>
+                <Text
+                  style={[
+                    styles.leagueLogoLabel,
+                    selectedLeagueId === ALL_LEAGUES_ID && styles.leagueLogoLabelActive,
+                  ]}
+                  numberOfLines={1}
+                >
                   Tất cả
                 </Text>
               </TouchableOpacity>
+
               {leagues.map((league) => (
                 <TouchableOpacity
                   key={league.id}
-                  style={[styles.leagueChip, selectedLeagueId === league.id && styles.leagueChipActive]}
+                  style={[
+                    styles.leagueLogoItem,
+                    selectedLeagueId === league.id && styles.leagueLogoItemActive,
+                  ]}
                   onPress={() => setSelectedLeagueId(league.id)}
                 >
-                  <Text style={[styles.leagueChipText, selectedLeagueId === league.id && styles.leagueChipTextActive]}>
+                  <View
+                    style={[
+                      styles.leagueLogoCircle,
+                      selectedLeagueId === league.id && styles.leagueLogoCircleActive,
+                    ]}
+                  >
+                    {league.emblem_url ? (
+                      <Image source={{ uri: league.emblem_url }} style={styles.leagueLogoImage} />
+                    ) : (
+                      <MaterialIcons name="sports-soccer" size={24} color={Colors.textMuted} />
+                    )}
+                  </View>
+                  <Text
+                    style={[
+                      styles.leagueLogoLabel,
+                      selectedLeagueId === league.id && styles.leagueLogoLabelActive,
+                    ]}
+                    numberOfLines={1}
+                  >
                     {league.code}
                   </Text>
                 </TouchableOpacity>
@@ -306,24 +406,61 @@ export default function HomeScreen() {
           </View>
         )}
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Tính năng chính</Text>
-          <View style={styles.featureGrid}>
-            {featureCards.map((item) => (
+        {/* ── Banner Carousel ──────────────────────────────────── */}
+        <View style={styles.carouselSection}>
+          <ScrollView
+            ref={carouselRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={onCarouselScroll}
+            decelerationRate="fast"
+            snapToInterval={SCREEN_WIDTH - 32}
+            snapToAlignment="center"
+            contentContainerStyle={{ paddingHorizontal: 0 }}
+          >
+            {BANNERS.map((banner) => (
               <TouchableOpacity
-                key={item.key}
-                style={styles.featureCard}
-                activeOpacity={0.8}
-                onPress={() => router.push(item.route as any)}
+                key={banner.key}
+                activeOpacity={0.9}
+                onPress={() => router.push(banner.route as any)}
+                style={styles.bannerWrapper}
               >
-                <MaterialIcons name={item.icon as any} size={20} color={Colors.neonGreen} />
-                <Text style={styles.featureTitle}>{item.title}</Text>
-                <Text style={styles.featureSubtitle}>{item.subtitle}</Text>
+                <LinearGradient
+                  colors={[...banner.gradientColors]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.bannerCard}
+                >
+                  <View style={styles.bannerContent}>
+                    <View style={styles.bannerTextCol}>
+                      <Text style={styles.bannerTitle}>{banner.title}</Text>
+                      <Text style={styles.bannerSubtitle}>{banner.subtitle}</Text>
+                    </View>
+                    <View style={styles.bannerIconWrap}>
+                      <MaterialIcons name={banner.icon} size={48} color="rgba(255,255,255,0.25)" />
+                    </View>
+                  </View>
+                  <View style={styles.bannerCta}>
+                    <Text style={styles.bannerCtaText}>Xem ngay</Text>
+                    <MaterialIcons name="arrow-forward" size={14} color={Colors.white} />
+                  </View>
+                </LinearGradient>
               </TouchableOpacity>
+            ))}
+          </ScrollView>
+          {/* Pagination dots */}
+          <View style={styles.dotsRow}>
+            {BANNERS.map((b, i) => (
+              <View
+                key={b.key}
+                style={[styles.dot, i === activeBanner && styles.dotActive]}
+              />
             ))}
           </View>
         </View>
 
+        {/* ── Live Matches ────────────────────────────────────── */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
@@ -382,6 +519,7 @@ export default function HomeScreen() {
           ))}
         </View>
 
+        {/* ── Upcoming Matches ────────────────────────────────── */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Sắp diễn ra</Text>
@@ -461,32 +599,96 @@ const styles = StyleSheet.create({
   sectionTitle: { color: Colors.white, fontSize: 17, fontWeight: '700' },
   liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.liveRed },
   linkText: { color: Colors.neonGreen, fontSize: 12, fontWeight: '600' },
-  leagueScroll: { paddingTop: 10, gap: 8 },
-  leagueChip: {
+
+  // ── League Logo Carousel ────────────────────────────────────
+  leagueLogoScroll: { paddingTop: 10, paddingRight: 16, gap: 12 },
+  leagueLogoItem: { alignItems: 'center', gap: 6, width: 64 },
+  leagueLogoItemActive: {},
+  leagueLogoCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(30,41,59,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(100,116,139,0.2)',
+  },
+  leagueLogoCircleActive: {
+    borderColor: Colors.neonGreen,
+    backgroundColor: 'rgba(173,255,47,0.08)',
+  },
+  leagueLogoImage: { width: 32, height: 32, borderRadius: 4 },
+  leagueLogoLabel: {
+    color: Colors.textMuted,
+    fontSize: 10,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  leagueLogoLabelActive: { color: Colors.neonGreen },
+
+  // ── Banner Carousel ─────────────────────────────────────────
+  carouselSection: { marginTop: 16, paddingHorizontal: 16 },
+  bannerWrapper: { width: SCREEN_WIDTH - 32 },
+  bannerCard: {
+    borderRadius: 18,
+    padding: 20,
+    minHeight: 130,
+    justifyContent: 'space-between',
+    overflow: 'hidden',
+  },
+  bannerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  bannerTextCol: { flex: 1, paddingRight: 8 },
+  bannerTitle: {
+    color: Colors.white,
+    fontSize: 20,
+    fontWeight: '900',
+    letterSpacing: -0.3,
+  },
+  bannerSubtitle: {
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: 13,
+    fontWeight: '500',
+    marginTop: 4,
+    lineHeight: 18,
+  },
+  bannerIconWrap: { opacity: 0.7, marginTop: -4 },
+  bannerCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 14,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.15)',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(100,116,139,0.2)',
-    backgroundColor: 'rgba(30,41,59,0.5)',
+    borderRadius: 20,
   },
-  leagueChipActive: {
-    borderColor: Colors.neonGreen,
-    backgroundColor: 'rgba(173,255,47,0.12)',
+  bannerCtaText: { color: Colors.white, fontSize: 12, fontWeight: '700' },
+  dotsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 10,
   },
-  leagueChipText: { color: Colors.textMuted, fontWeight: '700', fontSize: 12 },
-  leagueChipTextActive: { color: Colors.neonGreen },
-  featureGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 10 },
-  featureCard: {
-    width: '48.5%',
-    backgroundColor: Colors.cardBg,
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(100,116,139,0.18)',
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(100,116,139,0.4)',
   },
-  featureTitle: { color: Colors.white, fontSize: 14, fontWeight: '700', marginTop: 8 },
-  featureSubtitle: { color: Colors.textMuted, fontSize: 11, marginTop: 2 },
+  dotActive: {
+    width: 20,
+    backgroundColor: Colors.neonGreen,
+    borderRadius: 3,
+  },
+
+  // ── Match cards ─────────────────────────────────────────────
   liveCard: {
     backgroundColor: Colors.cardBg,
     borderRadius: 16,

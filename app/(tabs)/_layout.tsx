@@ -1,5 +1,4 @@
 import { Tabs } from 'expo-router';
-import { View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '@/constants/colors';
 
@@ -50,6 +49,15 @@ export default function TabsLayout() {
           title: 'Đơn cược',
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="receipt-long" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="standings"
+        options={{
+          title: 'BXH',
+          tabBarIcon: ({ color, size }) => (
+            <MaterialIcons name="emoji-events" size={size} color={color} />
           ),
         }}
       />

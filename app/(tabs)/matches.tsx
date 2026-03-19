@@ -273,9 +273,7 @@ export default function MatchesScreen() {
       <View style={styles.header}>
         <MaterialIcons name="sports-soccer" size={24} color={Colors.neonGreen} />
         <Text style={styles.headerTitle}>Trận đấu</Text>
-        <TouchableOpacity onPress={() => router.push('/standings')} style={{ padding: 4 }}>
-          <MaterialIcons name="emoji-events" size={22} color={Colors.pendingYellow} />
-        </TouchableOpacity>
+        <View style={{ width: 24 }} />
       </View>
 
       {(leagues.length > 0 || leagueFilterEnabled) && (

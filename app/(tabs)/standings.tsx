@@ -140,7 +140,7 @@ export default function StandingsScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={22} color={Colors.white} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>🏆 Bảng xếp hạng</Text>
+        <Text style={styles.headerTitle}>Bảng xếp hạng</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -148,6 +148,7 @@ export default function StandingsScreen() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={styles.leagueFilterContainer}
         contentContainerStyle={styles.leagueFilterRow}
       >
         {leagues.map((league) => (
@@ -342,11 +343,16 @@ const styles = StyleSheet.create({
   backButton: { padding: 8, borderRadius: 20 },
   headerTitle: { color: Colors.white, fontSize: 17, fontWeight: '700' },
   // League filter
+  leagueFilterContainer: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
   leagueFilterRow: {
     flexDirection: 'row',
     gap: 8,
     paddingHorizontal: 16,
     paddingVertical: 12,
+    paddingRight: 24,
   },
   leagueChip: {
     flexDirection: 'row',
@@ -358,6 +364,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     backgroundColor: 'rgba(30,41,59,0.45)',
+    flexShrink: 0,
+    alignSelf: 'center',
   },
   leagueChipActive: {
     backgroundColor: Colors.neonGreenBg,
@@ -367,7 +375,6 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: 13,
     fontWeight: '600',
-    maxWidth: 120,
   },
   leagueChipTextActive: { color: Colors.neonGreen },
   leagueEmblem: { width: 18, height: 18, borderRadius: 4 },

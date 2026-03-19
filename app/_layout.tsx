@@ -40,7 +40,7 @@ export default function RootLayout() {
       // Guest user — let them browse (tabs) freely, no redirect
       if (inAdmin) {
         router.replace('/(tabs)');
-      } else if (segments[0] !== '(tabs)' && segments[0] !== 'match' && segments[0] !== 'leaderboard') {
+      } else if (segments[0] !== '(tabs)' && segments[0] !== 'match' && segments[0] !== 'leaderboard' && segments[0] !== 'standings') {
         router.replace('/(tabs)');
       }
     }
@@ -69,6 +69,13 @@ export default function RootLayout() {
         />
         <Stack.Screen
           name="leaderboard"
+          options={{
+            headerShown: false,
+            presentation: 'card',
+          }}
+        />
+        <Stack.Screen
+          name="standings"
           options={{
             headerShown: false,
             presentation: 'card',
