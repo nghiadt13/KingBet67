@@ -12,8 +12,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Colors } from '@/constants/colors';
-import { Shadows } from '@/constants/colors';
+import { Colors, Shadows } from '@/constants/colors';
 import { useAuthStore } from '@/stores/authStore';
 
 export default function LoginScreen() {

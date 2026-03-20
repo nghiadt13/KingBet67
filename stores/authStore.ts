@@ -13,7 +13,7 @@ interface AuthState {
   // Actions
   initialize: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, username: string) => Promise<void>;
+  signUp: (email: string, password: string, username: string) => Promise<boolean>;
   signOut: () => Promise<void>;
   clearError: () => void;
   fetchUserProfile: () => Promise<void>;
@@ -100,8 +100,10 @@ export const useAuthStore = create<AuthState>((set, get) => {
         },
       });
       if (error) throw error;
+      return true;
     } catch (err: any) {
       set({ error: err.message || 'Đăng ký thất bại' });
+      return false;
     } finally {
       set({ isLoading: false });
     }

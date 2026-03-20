@@ -36,6 +36,7 @@ const BANNERS = [
     icon: 'casino' as const,
     gradientColors: ['#0d9488', '#065f46', '#022c22'] as const,
     route: '/matches',
+    imageUrl: 'https://images.unsplash.com/photo-1489944440615-453fc2b6a9a9?w=800&q=80',
   },
   {
     key: 'hot',
@@ -44,6 +45,7 @@ const BANNERS = [
     icon: 'local-fire-department' as const,
     gradientColors: ['#ea580c', '#dc2626', '#7f1d1d'] as const,
     route: '/matches',
+    imageUrl: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800&q=80',
   },
   {
     key: 'standings',
@@ -52,6 +54,7 @@ const BANNERS = [
     icon: 'emoji-events' as const,
     gradientColors: ['#d97706', '#b45309', '#451a03'] as const,
     route: '/(tabs)/standings',
+    imageUrl: 'https://images.unsplash.com/photo-1560272564-c83b66b1ad12?w=800&q=80',
   },
 ];
 
@@ -426,12 +429,18 @@ export default function HomeScreen() {
                 onPress={() => router.push(banner.route as any)}
                 style={styles.bannerWrapper}
               >
-                <LinearGradient
-                  colors={[...banner.gradientColors]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.bannerCard}
-                >
+                <View style={styles.bannerCard}>
+                  <Image
+                    source={{ uri: banner.imageUrl }}
+                    style={styles.bannerBgImage}
+                    resizeMode="cover"
+                  />
+                  <LinearGradient
+                    colors={[...banner.gradientColors.map(c => c + 'CC')] as [string, string, string]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.bannerGradientOverlay}
+                  />
                   <View style={styles.bannerContent}>
                     <View style={styles.bannerTextCol}>
                       <Text style={styles.bannerTitle}>{banner.title}</Text>
@@ -445,7 +454,7 @@ export default function HomeScreen() {
                     <Text style={styles.bannerCtaText}>Xem ngay</Text>
                     <MaterialIcons name="arrow-forward" size={14} color={Colors.white} />
                   </View>
-                </LinearGradient>
+                </View>
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -636,6 +645,14 @@ const styles = StyleSheet.create({
     minHeight: 130,
     justifyContent: 'space-between',
     overflow: 'hidden',
+  },
+  bannerBgImage: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 18,
+  },
+  bannerGradientOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 18,
   },
   bannerContent: {
     flexDirection: 'row',

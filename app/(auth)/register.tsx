@@ -9,9 +9,11 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Colors, Shadows } from '@/constants/colors';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -25,6 +27,7 @@ export default function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [localError, setLocalError] = useState('');
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const handleRegister = async () => {
     setLocalError('');
@@ -55,7 +58,15 @@ export default function RegisterScreen() {
       return;
     }
 
-    await signUp(email.trim(), password, username.trim());
+    const success = await signUp(email.trim(), password, username.trim());
+    if (success) {
+      setShowSuccessModal(true);
+    }
+  };
+
+  const handleDismissSuccess = () => {
+    setShowSuccessModal(false);
+    router.back(); // Navigate back to login
   };
 
   const displayError = localError || error;
@@ -209,6 +220,46 @@ export default function RegisterScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* ── Success Modal ────────────────────────────────────────── */}
+      <Modal
+        visible={showSuccessModal}
+        transparent
+        animationType="fade"
+        onRequestClose={handleDismissSuccess}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            {/* Glow circle */}
+            <LinearGradient
+              colors={[Colors.neonGreen, '#22c55e', '#15803d']}
+              style={styles.modalGlow}
+            />
+            {/* Icon */}
+            <View style={styles.modalIconWrap}>
+              <Text style={styles.modalEmoji}>🎉</Text>
+            </View>
+
+            <Text style={styles.modalTitle}>Chúc mừng bạn!</Text>
+            <Text style={styles.modalMessage}>
+              Chúc mừng bạn đã nhận được{'\n'}
+              <Text style={styles.modalAmount}>1 000 000đ</Text>
+            </Text>
+            <Text style={styles.modalNote}>
+              Số tiền đã được cộng vào tài khoản của bạn. Hãy bắt đầu trải nghiệm ngay!
+            </Text>
+
+            <TouchableOpacity
+              style={styles.modalButton}
+              onPress={handleDismissSuccess}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.modalButtonText}>Bắt đầu ngay</Text>
+              <MaterialIcons name="arrow-forward" size={18} color={Colors.black} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -374,5 +425,92 @@ const styles = StyleSheet.create({
     color: Colors.neonGreen,
     fontSize: 14,
     fontWeight: '700',
+  },
+
+  // ── Success Modal ──────────────────────────────────────────────
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    backgroundColor: Colors.cardBg,
+    borderRadius: 24,
+    paddingHorizontal: 28,
+    paddingVertical: 36,
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 340,
+    borderWidth: 1,
+    borderColor: 'rgba(173,255,47,0.2)',
+    overflow: 'hidden',
+  },
+  modalGlow: {
+    position: 'absolute',
+    top: -60,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    opacity: 0.15,
+  },
+  modalIconWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(173,255,47,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalEmoji: {
+    fontSize: 42,
+  },
+  modalTitle: {
+    color: Colors.neonGreen,
+    fontSize: 24,
+    fontWeight: '900',
+    marginBottom: 12,
+    letterSpacing: -0.3,
+  },
+  modalMessage: {
+    color: Colors.white,
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 8,
+  },
+  modalAmount: {
+    color: Colors.neonGreen,
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  modalNote: {
+    color: Colors.textMuted,
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 24,
+    paddingHorizontal: 8,
+  },
+  modalButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Colors.neonGreen,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    width: '100%',
+    ...Shadows.neonGlow,
+  },
+  modalButtonText: {
+    color: Colors.black,
+    fontSize: 15,
+    fontWeight: '900',
+    letterSpacing: 0.5,
   },
 });
